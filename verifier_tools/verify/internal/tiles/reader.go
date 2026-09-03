@@ -2,7 +2,9 @@
 package tiles
 
 import (
+	"bytes"
 	"crypto/sha256"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"log/slog"
@@ -24,6 +26,7 @@ type HashReader struct {
 	URL        string
 	TileHeight int
 	TreeSize   int64
+	IsTessera  bool
 }
 
 // Domain separation prefix for Merkle tree hashing with second preimage
@@ -74,6 +77,10 @@ func (h HashReader) ReadHashes(indices []int64) ([]tlog.Hash, error) {
 		}
 
 		pathForLookup := tile.Path()
+		if h.IsTessera {
+			// Tessera / c2sp tile path format is tile/<L>/<N>[.p/<W>], omitting the height <H>.
+			pathForLookup = "tile/" + strings.TrimPrefix(pathForLookup, fmt.Sprintf("tile/%d/", h.TileHeight))
+		}
 		content, exists := tiles[pathForLookup]
 		var err error
 
@@ -267,4 +274,148 @@ func PayloadHash(p []byte) (tlog.Hash, error) {
 	var hash tlog.Hash
 	copy(hash[:], h[:])
 	return hash, nil
+}
+
+// EntryTilePath returns the relative path for an entry tile given its index N and width W.
+func EntryTilePath(tileN int64, w int) string {
+	t := tlog.Tile{H: 8, L: 0, N: tileN, W: w}
+	p := t.Path()
+	return "tile/entries/" + strings.TrimPrefix(p, "tile/8/0/")
+}
+
+// ParseEntryBundle parses an entry bundle encoded according to the tlog-tiles spec:
+// a sequence of 2-byte big-endian length-prefixed entries.
+func ParseEntryBundle(data []byte) ([][]byte, error) {
+	var entries [][]byte
+	r := bytes.NewReader(data)
+	for r.Len() > 0 {
+		var length uint16
+		if err := binary.Read(r, binary.BigEndian, &length); err != nil {
+			return nil, fmt.Errorf("failed to read entry length: %w", err)
+		}
+		if int(length) > r.Len() {
+			return nil, fmt.Errorf("entry length %d exceeds remaining data length %d", length, r.Len())
+		}
+		entry := make([]byte, length)
+		if _, err := io.ReadFull(r, entry); err != nil {
+			return nil, fmt.Errorf("failed to read entry data: %w", err)
+		}
+		entries = append(entries, entry)
+	}
+	return entries, nil
+}
+
+func readCachedEntryTile(logBaseURL string, tileN int64, w int) ([]byte, error) {
+	entryPath := EntryTilePath(tileN, w)
+
+	cacheDir, err := os.UserCacheDir()
+	if err != nil {
+		slog.Warn("Failed to get user cache dir, falling back to direct download", "error", err)
+		b, err := readFromURL(logBaseURL, entryPath)
+		if err != nil {
+			// Fallback to tiles/entries/ if tile/entries/ fails
+			altPath := "tiles/entries/" + strings.TrimPrefix(entryPath, "tile/entries/")
+			return readFromURL(logBaseURL, altPath)
+		}
+		return b, nil
+	}
+
+	abtCacheDir := filepath.Join(cacheDir, "android-binary-transparency")
+	if err := os.MkdirAll(abtCacheDir, 0755); err != nil {
+		slog.Warn("Failed to create cache dir, falling back to direct download", "error", err)
+		b, err := readFromURL(logBaseURL, entryPath)
+		if err != nil {
+			altPath := "tiles/entries/" + strings.TrimPrefix(entryPath, "tile/entries/")
+			return readFromURL(logBaseURL, altPath)
+		}
+		return b, nil
+	}
+
+	urlHash := sha256.Sum256([]byte(logBaseURL))
+	// TODO: Consider implementing cache cleanup / TTL eviction for older partial entry tiles (w < 256) as the tree grows.
+	cacheFilename := fmt.Sprintf("%x_entry_tile_%d_%d", urlHash[:8], tileN, w)
+	cachePath := filepath.Join(abtCacheDir, cacheFilename)
+
+	// Try reading from cache
+	if b, err := os.ReadFile(cachePath); err == nil {
+		slog.Debug("Loaded entry tile from local cache", "path", cachePath)
+		return b, nil
+	}
+
+	// Cache miss, download from URL
+	slog.Debug("Downloading entry tile", "url", logBaseURL+"/"+entryPath)
+	b, err := readFromURL(logBaseURL, entryPath)
+	if err != nil {
+		altPath := "tiles/entries/" + strings.TrimPrefix(entryPath, "tile/entries/")
+		slog.Debug("Trying alternative entry tile path", "url", logBaseURL+"/"+altPath)
+		b, err = readFromURL(logBaseURL, altPath)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Save to cache atomically
+	tmpFile, err := os.CreateTemp(abtCacheDir, cacheFilename+".*.tmp")
+	if err != nil {
+		slog.Warn("Failed to create cache tmp file", "error", err)
+		return b, nil
+	}
+	tmpPath := tmpFile.Name()
+	defer os.Remove(tmpPath)
+
+	if _, err := tmpFile.Write(b); err != nil {
+		slog.Warn("Failed to write to cache tmp file", "error", err)
+		tmpFile.Close()
+		return b, nil
+	}
+	if err := tmpFile.Close(); err != nil {
+		slog.Warn("Failed to close cache tmp file", "error", err)
+		return b, nil
+	}
+
+	if err := os.Rename(tmpPath, cachePath); err != nil {
+		slog.Warn("Failed to move cache file to final destination", "error", err)
+		return b, nil
+	}
+
+	return b, nil
+}
+
+// TesseraFindPayloadIndex searches the Tessera entry tiles for targetPayload
+// and returns its 0-based sequence index in the log.
+// Returns (index, true, nil) if found, (-1, false, nil) if not found.
+func TesseraFindPayloadIndex(logBaseURL string, treeSize int64, targetPayload []byte) (int64, bool, error) {
+	if treeSize <= 0 {
+		return -1, false, nil
+	}
+
+	numTiles := (treeSize + 255) / 256
+	target := bytes.TrimSpace(targetPayload)
+
+	// TODO: Consider supporting reverse scanning (from last tile to first) as recent packages tend to be
+	//       more commonly verified.
+	for tileN := int64(0); tileN < numTiles; tileN++ {
+		w := 256
+		if (tileN+1)*256 > treeSize {
+			w = int(treeSize - tileN*256)
+		}
+
+		b, err := readCachedEntryTile(logBaseURL, tileN, w)
+		if err != nil {
+			return -1, false, fmt.Errorf("failed to fetch entry tile %d (width %d): %w", tileN, w, err)
+		}
+
+		entries, err := ParseEntryBundle(b)
+		if err != nil {
+			return -1, false, fmt.Errorf("failed to parse entry tile %d: %w", tileN, err)
+		}
+
+		for idx, entry := range entries {
+			if bytes.Equal(bytes.TrimSpace(entry), target) {
+				return tileN*256 + int64(idx), true, nil
+			}
+		}
+	}
+
+	return -1, false, nil
 }

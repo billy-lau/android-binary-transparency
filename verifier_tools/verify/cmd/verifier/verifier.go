@@ -24,10 +24,10 @@ import (
 	"flag"
 	"log/slog"
 	"os"
-	"path/filepath"
 
 	"github.com/android/android-binary-transparency/verifier_tools/verify/internal/checkpoint"
 	"github.com/android/android-binary-transparency/verifier_tools/verify/internal/tiles"
+	"golang.org/x/mod/sumdb/note"
 	"golang.org/x/mod/sumdb/tlog"
 
 	_ "embed"
@@ -43,7 +43,9 @@ const (
 	KeyNameForVerifierMainlineModule = "gstatic.com/android/binary_transparency/mainline/modules/2026/0"
 	LogBaseURLPixel                  = "https://developers.google.com/android/binary_transparency"
 	LogBaseURLG1PJWT                 = "https://developers.google.com/android/binary_transparency/google1p"
-	LogBaseURLG1PAPK                 = "https://www.gstatic.com/android/binary_transparency/google1p/apk/2026/01"
+	LogBaseURLG1PAPK202601           = "https://www.gstatic.com/android/binary_transparency/google1p/apk/2026/01"
+	LogBaseURLG1PAPK202602           = "https://www.gstatic.com/android/binary_transparency/google1p/apk/2026/02"
+	NoteVerifierG1PAPK202602         = "android.transparency.goog/google1p/apk/2026/1+fc654374+ATr9NQE0gvOtVfj5cCStUzdlflEp3oZoNHD8pImzPj5O"
 	LogBaseURLMainlineModule         = "https://www.gstatic.com/android/binary_transparency/mainline/2026/01"
 	ImageInfoFilename                = "image_info.txt"
 	PackageInfoFilename              = "package_info.txt"
@@ -75,6 +77,16 @@ var (
 	logType     = flag.String("log_type", "", "Which log: 'pixel' or 'google_1p_code' or 'google_1p_apk' or 'mainline_module'.")
 )
 
+type logTarget struct {
+	name               string
+	baseURL            string
+	checkpointPath     string
+	verifier           note.Verifier
+	tileHeight         int
+	isTessera          bool
+	binaryInfoFilename string
+}
+
 func main() {
 	flag.Parse()
 
@@ -94,89 +106,163 @@ func main() {
 		slog.Info("Reformatted payload content", "from", b, "to", payloadBytes)
 	}
 
-	var logPubKey []byte
-	var logBaseURL string
-	var keyNameForVerifier string
-	var binaryInfoFilename string
-	var tileHeight int
+	var targets []logTarget
 	switch *logType {
 	case "":
 		slog.Error("must specify which log to verify against using '--log_type' flag: {pixel, google_1p_code, google_1p_apk, mainline_module}")
 		os.Exit(1)
 	case "pixel":
-		logPubKey = pixelLogPubKey
-		logBaseURL = LogBaseURLPixel
-		keyNameForVerifier = KeyNameForVerifierPixel
-		binaryInfoFilename = ImageInfoFilename
-		tileHeight = 1
+		v, err := checkpoint.NewVerifier(pixelLogPubKey, KeyNameForVerifierPixel)
+		if err != nil {
+			slog.Error("error creating verifier", "log", "pixel", "error", err)
+			os.Exit(1)
+		}
+		targets = append(targets, logTarget{
+			name:               "pixel",
+			baseURL:            LogBaseURLPixel,
+			checkpointPath:     "checkpoint.txt",
+			verifier:           v,
+			tileHeight:         1,
+			isTessera:          false,
+			binaryInfoFilename: ImageInfoFilename,
+		})
 	case "google_1p_code":
-		logPubKey = googleSystemAppLogPubKey
-		logBaseURL = LogBaseURLG1PJWT
-		keyNameForVerifier = KeyNameForVerifierG1PJWT
-		binaryInfoFilename = PackageInfoFilename
-		tileHeight = 1
+		v, err := checkpoint.NewVerifier(googleSystemAppLogPubKey, KeyNameForVerifierG1PJWT)
+		if err != nil {
+			slog.Error("error creating verifier", "log", "google_1p_code", "error", err)
+			os.Exit(1)
+		}
+		targets = append(targets, logTarget{
+			name:               "google_1p_code",
+			baseURL:            LogBaseURLG1PJWT,
+			checkpointPath:     "checkpoint.txt",
+			verifier:           v,
+			tileHeight:         1,
+			isTessera:          false,
+			binaryInfoFilename: PackageInfoFilename,
+		})
 	case "google_1p_apk":
-		logPubKey = googleAPKLogPubKey
-		logBaseURL = LogBaseURLG1PAPK
-		keyNameForVerifier = KeyNameForVerifierG1PAPK
-		binaryInfoFilename = PackageInfoFilename
-		tileHeight = 8
+		// Shard 2026/02: Tessera log
+		v2, err := note.NewVerifier(NoteVerifierG1PAPK202602)
+		if err != nil {
+			slog.Error("error creating verifier for 2026/02 Tessera log", "error", err)
+			os.Exit(1)
+		}
+		targets = append(targets, logTarget{
+			name:           "google_1p_apk (2026/02 Tessera)",
+			baseURL:        LogBaseURLG1PAPK202602,
+			checkpointPath: "checkpoint",
+			verifier:       v2,
+			tileHeight:     8,
+			isTessera:      true,
+		})
+
+		// Shard 2026/01: Legacy log continuation fallback
+		v1, err := checkpoint.NewVerifier(googleAPKLogPubKey, KeyNameForVerifierG1PAPK)
+		if err != nil {
+			slog.Error("error creating verifier for 2026/01 log", "error", err)
+			os.Exit(1)
+		}
+		targets = append(targets, logTarget{
+			name:               "google_1p_apk (2026/01)",
+			baseURL:            LogBaseURLG1PAPK202601,
+			checkpointPath:     "checkpoint.txt",
+			verifier:           v1,
+			tileHeight:         8,
+			isTessera:          false,
+			binaryInfoFilename: PackageInfoFilename,
+		})
 	case "mainline_module":
-		logPubKey = mainlineModuleLogPubKey
-		logBaseURL = LogBaseURLMainlineModule
-		keyNameForVerifier = KeyNameForVerifierMainlineModule
-		binaryInfoFilename = ModuleInfoFilename
-		tileHeight = 8
+		v, err := checkpoint.NewVerifier(mainlineModuleLogPubKey, KeyNameForVerifierMainlineModule)
+		if err != nil {
+			slog.Error("error creating verifier", "log", "mainline_module", "error", err)
+			os.Exit(1)
+		}
+		targets = append(targets, logTarget{
+			name:               "mainline_module",
+			baseURL:            LogBaseURLMainlineModule,
+			checkpointPath:     "checkpoint.txt",
+			verifier:           v,
+			tileHeight:         8,
+			isTessera:          false,
+			binaryInfoFilename: ModuleInfoFilename,
+		})
 	default:
 		slog.Error("unsupported log type")
 		os.Exit(1)
 	}
 
-	v, err := checkpoint.NewVerifier(logPubKey, keyNameForVerifier)
-	if err != nil {
-		slog.Error("error creating verifier", "error", err)
-		os.Exit(1)
-	}
-	root, err := checkpoint.FromURL(logBaseURL, v)
-	if err != nil {
-		slog.Error("error reading checkpoint", "log", logBaseURL, "error", err)
-		os.Exit(1)
+	var verified bool
+	for _, target := range targets {
+		slog.Info("Checking log", "log", target.name, "url", target.baseURL)
+		root, err := checkpoint.FromURLWithPath(target.baseURL, target.checkpointPath, target.verifier)
+		if err != nil {
+			slog.Warn("Failed to read checkpoint", "log", target.name, "error", err)
+			continue
+		}
+
+		logSize := int64(root.Size)
+		var binaryInfoIndex int64
+		var found bool
+
+		if target.isTessera {
+			idx, ok, err := tiles.TesseraFindPayloadIndex(target.baseURL, logSize, payloadBytes)
+			if err != nil {
+				slog.Warn("Failed to search Tessera entry tiles", "log", target.name, "error", err)
+				continue
+			}
+			binaryInfoIndex = idx
+			found = ok
+		} else {
+			m, err := tiles.BinaryInfosIndex(target.baseURL, target.binaryInfoFilename, logSize)
+			if err != nil {
+				slog.Warn("Failed to load binary info map", "log", target.name, "error", err)
+				continue
+			}
+			idx, ok := m[string(payloadBytes)]
+			binaryInfoIndex = idx
+			found = ok
+		}
+
+		if !found {
+			slog.Info("Payload not found in log", "log", target.name)
+			continue
+		}
+
+		var th tlog.Hash
+		copy(th[:], root.Hash)
+
+		r := tiles.HashReader{
+			URL:        target.baseURL,
+			TileHeight: target.tileHeight,
+			TreeSize:   logSize,
+			IsTessera:  target.isTessera,
+		}
+		slog.Debug("tlog.ProveRecord", "log", target.name, "logSize", logSize, "binaryInfoIndex", binaryInfoIndex)
+		rp, err := tlog.ProveRecord(logSize, binaryInfoIndex, r)
+		if err != nil {
+			slog.Error("error in tlog.ProveRecord", "log", target.name, "error", err)
+			os.Exit(1)
+		}
+
+		leafHash, err := tiles.PayloadHash(payloadBytes)
+		if err != nil {
+			slog.Error("error hashing payload", "error", err)
+			os.Exit(1)
+		}
+
+		if err := tlog.CheckRecord(rp, logSize, th, binaryInfoIndex, leafHash); err != nil {
+			slog.Error("FAILURE: inclusion check error in tlog.CheckRecord", "log", target.name, "error", err)
+			os.Exit(1)
+		}
+
+		slog.Info("OK. inclusion check success!", "log", target.name)
+		verified = true
+		break
 	}
 
-	logSize := int64(root.Size)
-
-	m, err := tiles.BinaryInfosIndex(logBaseURL, binaryInfoFilename, logSize)
-	if err != nil {
-		slog.Error("failed to load binary info map to find log index", "error", err)
+	if !verified {
+		slog.Error("FAILURE: payload not verified in any log")
 		os.Exit(1)
-	}
-	binaryInfoIndex, ok := m[string(payloadBytes)]
-	if !ok {
-		slog.Error("failed to find payload", "payload", string(payloadBytes), "file", filepath.Join(logBaseURL, binaryInfoFilename))
-		os.Exit(1)
-	}
-
-	var th tlog.Hash
-	copy(th[:], root.Hash)
-
-	r := tiles.HashReader{URL: logBaseURL, TileHeight: tileHeight, TreeSize: logSize}
-	slog.Debug("tlog.ProveRecord", "logSize", logSize, "binaryInfoIndex", binaryInfoIndex)
-	rp, err := tlog.ProveRecord(logSize, binaryInfoIndex, r)
-	if err != nil {
-		slog.Error("error in tlog.ProveRecord", "error", err)
-		os.Exit(1)
-	}
-
-	leafHash, err := tiles.PayloadHash(payloadBytes)
-	if err != nil {
-		slog.Error("error hashing payload", "error", err)
-		os.Exit(1)
-	}
-
-	if err := tlog.CheckRecord(rp, logSize, th, binaryInfoIndex, leafHash); err != nil {
-		slog.Error("FAILURE: inclusion check error in tlog.CheckRecord", "error", err)
-		os.Exit(1)
-	} else {
-		slog.Info("OK. inclusion check success!")
 	}
 }

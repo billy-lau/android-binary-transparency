@@ -29,7 +29,9 @@ The verifier uses the associated checkpoint (depending on the target log) and th
     * `https://developers.google.com/android/binary_transparency/google1p/tile/` (old log)
     * `https://gstatic.com/android/binary_transparency/google1p/jwt/2026/01/tile/` (latest sharded log)
   * Google Product Application Transparency Log
-    * `https://gstatic.com/android/binary_transparency/google1p/apk/2026/01/tile/`
+    * `https://gstatic.com/android/binary_transparency/google1p/apk/2026/01/tile/` (old log)
+    * `https://gstatic.com/android/binary_transparency/google1p/apk/2026/02/tile/` (latest Tessera-backed sharded log)
+      * `https://gstatic.com/android/binary_transparency/google1p/apk/2026/02/tile/entries/` (for data leaves)
 
 To run the verifier after you have built it in the previous section:
 ```

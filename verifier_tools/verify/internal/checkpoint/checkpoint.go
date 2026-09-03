@@ -43,6 +43,8 @@ const (
 	originIDG1P = "developers.google.com/android/binary_transparency/google1p/0\n"
 	// originIDG1PAPK identifies a checkpoint for the Google 1P APK Transparency Log.
 	originIDG1PAPK = "gstatic.com/android/binary_transparency/google1p/apk/2026/0\n"
+	// originIDG1PAPKTessera identifies a checkpoint for the Google 1P APK Transparency Log (Tessera shard).
+	originIDG1PAPKTessera = "android.transparency.goog/google1p/apk/2026/1\n"
 	// originIDMainlineModule identifies a checkpoint for the Android Mainline Module Transparency Log.
 	originIDMainlineModule = "gstatic.com/android/binary_transparency/mainline/modules/2026/0\n"
 )
@@ -121,36 +123,47 @@ func parseCheckpoint(ckpt string) (Root, error) {
 		body = ckpt[len(originIDG1P):]
 	case strings.HasPrefix(ckpt, originIDG1PAPK):
 		body = ckpt[len(originIDG1PAPK):]
+	case strings.HasPrefix(ckpt, originIDG1PAPKTessera):
+		body = ckpt[len(originIDG1PAPKTessera):]
 	case strings.HasPrefix(ckpt, originIDMainlineModule):
 		body = ckpt[len(originIDMainlineModule):]
 	default:
-		return Root{}, fmt.Errorf("invalid checkpoint - unknown origin, must be either %s, %s, or %s", originIDPixel, originIDG1P, originIDG1PAPK)
+		return Root{}, fmt.Errorf("invalid checkpoint - unknown origin, must be either %s, %s, %s, %s, or %s",
+			strings.TrimSpace(originIDPixel),
+			strings.TrimSpace(originIDG1P),
+			strings.TrimSpace(originIDG1PAPK),
+			strings.TrimSpace(originIDG1PAPKTessera),
+			strings.TrimSpace(originIDMainlineModule))
 	}
 
-	// body must contain exactly 2 lines, size and the root hash.
-	l := strings.SplitN(body, "\n", 3)
-	if len(l) != 3 || len(l[2]) != 0 {
+	if !strings.HasSuffix(ckpt, "\n") {
+		return Root{}, fmt.Errorf("invalid checkpoint - bad format: must terminate with newline")
+	}
+
+	// body must contain at least 2 lines: size and root hash.
+	lines := strings.Split(body, "\n")
+	if len(lines) < 3 || lines[0] == "" || lines[1] == "" {
 		return Root{}, fmt.Errorf("invalid checkpoint - bad format: must have origin id, size and root hash each followed by newline")
 	}
-	size, err := strconv.ParseUint(l[0], 10, 64)
+	size, err := strconv.ParseUint(lines[0], 10, 64)
 	if err != nil {
 		return Root{}, fmt.Errorf("invalid checkpoint - cannot read size: %w", err)
 	}
-	rh, err := base64.StdEncoding.DecodeString(l[1])
+	rh, err := base64.StdEncoding.DecodeString(lines[1])
 	if err != nil {
 		return Root{}, fmt.Errorf("invalid checkpoint - invalid roothash: %w", err)
 	}
 	return Root{Size: size, Hash: rh}, nil
 }
 
-func getSignedCheckpoint(logURL string) ([]byte, error) {
+func getSignedCheckpoint(logURL, checkpointPath string) ([]byte, error) {
 	// Sanity check the input url.
 	u, err := url.Parse(logURL)
 	if err != nil {
 		return []byte{}, fmt.Errorf("invalid URL %s: %v", u, err)
 	}
 
-	u.Path = path.Join(u.Path, "checkpoint.txt")
+	u.Path = path.Join(u.Path, checkpointPath)
 
 	resp, err := http.Get(u.String())
 	if err != nil {
@@ -164,20 +177,9 @@ func getSignedCheckpoint(logURL string) ([]byte, error) {
 	return io.ReadAll(resp.Body)
 }
 
-// FromURL verifies the signature and unpacks and returns a Root.
-//
-// Validates signature before reading data, using a provided verifier.
-// Data at `logURL` is the checkpoint and must be in the note format
-// (golang.org/x/mod/sumdb/note).
-//
-// The checkpoint must be for the Pixel Binary Transparency Log origin.
-//
-// Returns error if the signature fails to verify or if the checkpoint
-// does not conform to the following format:
-//
-//	[]byte("[origin]\n[size]\n[hash]").
-func FromURL(logURL string, v verifier) (Root, error) {
-	b, err := getSignedCheckpoint(logURL)
+// FromURLWithPath verifies the signature and unpacks and returns a Root from the given checkpoint path.
+func FromURLWithPath(logURL, checkpointPath string, v note.Verifier) (Root, error) {
+	b, err := getSignedCheckpoint(logURL, checkpointPath)
 	if err != nil {
 		return Root{}, fmt.Errorf("failed to get signed checkpoint: %v", err)
 	}
@@ -187,4 +189,18 @@ func FromURL(logURL string, v verifier) (Root, error) {
 		return Root{}, fmt.Errorf("failed to verify note signatures: %v", err)
 	}
 	return parseCheckpoint(n.Text)
+}
+
+// FromURL verifies the signature and unpacks and returns a Root.
+//
+// Validates signature before reading data, using a provided verifier.
+// Data at `logURL` is the checkpoint and must be in the note format
+// (golang.org/x/mod/sumdb/note).
+//
+// Returns error if the signature fails to verify or if the checkpoint
+// does not conform to the following format:
+//
+//	[]byte("[origin]\n[size]\n[hash]").
+func FromURL(logURL string, v note.Verifier) (Root, error) {
+	return FromURLWithPath(logURL, "checkpoint.txt", v)
 }
