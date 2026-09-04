@@ -1,14 +1,16 @@
 # Verifier of Binary Transparency for Pixel Factory Images
 
-This repository contains code to read the transparency log for three logs:
+This repository contains code to read the transparency log for four logs:
   * [Pixel Factory Images Binary Transparency](https://developers.google.com/android/binary_transparency/pixel_overview).
   * [Google System APK Transparency](https://developers.google.com/android/binary_transparency/google1p/overview)
   * [Google Product Application Transparency](https://developers.google.com/android/binary_transparency/google_apk/overview)
+  * [Android Mainline Modules Transparency](https://developers.google.com/android/binary_transparency/mainline_modules/log_details)
 
 See the particular section for this tool:
   * [Pixel](https://developers.google.com/android/binary_transparency/pixel_verification#verifying-image-inclusion-inclusion-proof)
   * [Google System APKs](https://developers.google.com/android/binary_transparency/google1p/verification_details#verifying_package_inclusion_inclusion_proof)
   * [Google Product Application](https://developers.google.com/android/binary_transparency/google_apk/verification_details)
+  * [Android Mainline Modules](https://developers.google.com/android/binary_transparency/mainline_modules/log_details)
 
 ## Files and Directories
 * `cmd/verifier/`
@@ -27,11 +29,15 @@ The verifier uses the associated checkpoint (depending on the target log) and th
     * `https://developers.google.com/android/binary_transparency/tile/`
   * Google System APK Transparency Log
     * `https://developers.google.com/android/binary_transparency/google1p/tile/` (old log)
-    * `https://gstatic.com/android/binary_transparency/google1p/jwt/2026/01/tile/` (latest sharded log)
+    * `https://www.gstatic.com/android/binary_transparency/google1p/jwt/2026/01/tile/` (latest sharded log)
   * Google Product Application Transparency Log
-    * `https://gstatic.com/android/binary_transparency/google1p/apk/2026/01/tile/` (old log)
-    * `https://gstatic.com/android/binary_transparency/google1p/apk/2026/02/tile/` (latest Tessera-backed sharded log)
-      * `https://gstatic.com/android/binary_transparency/google1p/apk/2026/02/tile/entries/` (for data leaves)
+    * `https://www.gstatic.com/android/binary_transparency/google1p/apk/2026/01/tile/` (old log)
+    * `https://www.gstatic.com/android/binary_transparency/google1p/apk/2026/02/tile/` (latest Tessera-backed sharded log)
+      * `https://www.gstatic.com/android/binary_transparency/google1p/apk/2026/02/tile/entries/` (for data leaves)
+  * Android Mainline Modules Transparency Log
+    * `https://www.gstatic.com/android/binary_transparency/mainline/2026/01/tile/` (old log)
+    * `https://www.gstatic.com/android/binary_transparency/mainline/2026/02/tile/` (latest Tessera-backed sharded log)
+      * `https://www.gstatic.com/android/binary_transparency/mainline/2026/02/tile/entries/` (for data leaves)
 
 To run the verifier after you have built it in the previous section:
 ```
@@ -41,6 +47,7 @@ where `log_type` is one of the following:
   * `pixel` (for Pixel Factory Images)
   * `google_1p_code` (for Google System APKs)
   * `google_1p_apk` (for Google Product Applications)
+  * `mainline_module` (for Android Mainline Modules)
 
 ### Input
 The verifier takes a `payload_path` and a `log_type` as input.
@@ -67,11 +74,16 @@ Each Google Product Application corresponds to a [payload](https://developers.go
 <hash>\n<hash_description>\n<package_name>\n<package_version_code>\n
 ```
 
-The `hash_description` for Google Product Applications is currently fixed as `SHA256(APK)`.
+The `hash_description` for Google Product Applications could either be `SHA256(APK)` or `SHA256(APEX)` depending on the file type.
 See [here](https://developers.google.com/android/binary_transparency/google_apk/verification_details#construct_a_payload_for_verification) to find out how to construct this payload from a candidate APK.
 
+#### Android Mainline Module
+Each Android Mainline Module corresponds to a [payload](https://developers.google.com/android/binary_transparency/mainline_modules/overview#log_content) stored in the transparency log, the format of which is:
+```
+<hash>\n<hash_description>\n<package_name>\n<package_version_code>\n
+```
 
-
+See [here](https://developers.google.com/android/binary_transparency/google_apk/verification_details#construct_a_payload_for_verification) to find out how to construct this payload from a candidate module APK/APEX.
 
 ### Output
 The output of the command is written to stdout:
