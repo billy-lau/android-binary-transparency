@@ -47,6 +47,8 @@ const (
 	originIDG1PAPKTessera = "android.transparency.goog/google1p/apk/2026/1\n"
 	// originIDMainlineModule identifies a checkpoint for the Android Mainline Module Transparency Log.
 	originIDMainlineModule = "gstatic.com/android/binary_transparency/mainline/modules/2026/0\n"
+	// originIDMainlineModuleTessera identifies a checkpoint for the Android Mainline Module Transparency Log (Tessera shard).
+	originIDMainlineModuleTessera = "android.transparency.goog/mainline/modules/2026/1\n"
 )
 
 type verifier interface {
@@ -127,13 +129,16 @@ func parseCheckpoint(ckpt string) (Root, error) {
 		body = ckpt[len(originIDG1PAPKTessera):]
 	case strings.HasPrefix(ckpt, originIDMainlineModule):
 		body = ckpt[len(originIDMainlineModule):]
+	case strings.HasPrefix(ckpt, originIDMainlineModuleTessera):
+		body = ckpt[len(originIDMainlineModuleTessera):]
 	default:
-		return Root{}, fmt.Errorf("invalid checkpoint - unknown origin, must be either %s, %s, %s, %s, or %s",
+		return Root{}, fmt.Errorf("invalid checkpoint - unknown origin, must be either %s, %s, %s, %s, %s, or %s",
 			strings.TrimSpace(originIDPixel),
 			strings.TrimSpace(originIDG1P),
 			strings.TrimSpace(originIDG1PAPK),
 			strings.TrimSpace(originIDG1PAPKTessera),
-			strings.TrimSpace(originIDMainlineModule))
+			strings.TrimSpace(originIDMainlineModule),
+			strings.TrimSpace(originIDMainlineModuleTessera))
 	}
 
 	if !strings.HasSuffix(ckpt, "\n") {

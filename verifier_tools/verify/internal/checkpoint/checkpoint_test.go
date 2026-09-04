@@ -138,6 +138,11 @@ func TestValidCheckpointFormat(t *testing.T) {
 			m:        "android.transparency.goog/google1p/apk/2026/1\n42\ndGhlIHZpZXcgZnJvbSB0aGUgdHJlZSB0b3BzIGlzIGdyZWF0IQ==\n",
 			wantSize: 42,
 		},
+		{
+			desc:     "mainline module tessera origin",
+			m:        "android.transparency.goog/mainline/modules/2026/1\n14\n1WyF4nQ0ONJUILx/rVTdxFoURKUdeGwHHLeIKCcIYHw=\n",
+			wantSize: 14,
+		},
 	}
 
 	for _, tt := range tests {

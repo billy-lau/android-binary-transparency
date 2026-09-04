@@ -46,7 +46,9 @@ const (
 	LogBaseURLG1PAPK202601           = "https://www.gstatic.com/android/binary_transparency/google1p/apk/2026/01"
 	LogBaseURLG1PAPK202602           = "https://www.gstatic.com/android/binary_transparency/google1p/apk/2026/02"
 	NoteVerifierG1PAPK202602         = "android.transparency.goog/google1p/apk/2026/1+fc654374+ATr9NQE0gvOtVfj5cCStUzdlflEp3oZoNHD8pImzPj5O"
-	LogBaseURLMainlineModule         = "https://www.gstatic.com/android/binary_transparency/mainline/2026/01"
+	LogBaseURLMainlineModule202601   = "https://www.gstatic.com/android/binary_transparency/mainline/2026/01"
+	LogBaseURLMainlineModule202602   = "https://www.gstatic.com/android/binary_transparency/mainline/2026/02"
+	NoteVerifierMainlineModule202602 = "android.transparency.goog/mainline/modules/2026/1+1a8e4064+AfwnHm59rNQTJICchMd7a2W5PQa7nC5h2gTEfq3fhCEI"
 	ImageInfoFilename                = "image_info.txt"
 	PackageInfoFilename              = "package_info.txt"
 	ModuleInfoFilename               = "module_info.txt"
@@ -173,16 +175,32 @@ func main() {
 			binaryInfoFilename: PackageInfoFilename,
 		})
 	case "mainline_module":
-		v, err := checkpoint.NewVerifier(mainlineModuleLogPubKey, KeyNameForVerifierMainlineModule)
+		// Shard 2026/02: Tessera log
+		v2, err := note.NewVerifier(NoteVerifierMainlineModule202602)
 		if err != nil {
-			slog.Error("error creating verifier", "log", "mainline_module", "error", err)
+			slog.Error("error creating verifier for 2026/02 Tessera log", "error", err)
 			os.Exit(1)
 		}
 		targets = append(targets, logTarget{
-			name:               "mainline_module",
-			baseURL:            LogBaseURLMainlineModule,
+			name:           "mainline_module (2026/02 Tessera)",
+			baseURL:        LogBaseURLMainlineModule202602,
+			checkpointPath: "checkpoint",
+			verifier:       v2,
+			tileHeight:     8,
+			isTessera:      true,
+		})
+
+		// Shard 2026/01: Legacy log continuation fallback
+		v1, err := checkpoint.NewVerifier(mainlineModuleLogPubKey, KeyNameForVerifierMainlineModule)
+		if err != nil {
+			slog.Error("error creating verifier for 2026/01 log", "error", err)
+			os.Exit(1)
+		}
+		targets = append(targets, logTarget{
+			name:               "mainline_module (2026/01)",
+			baseURL:            LogBaseURLMainlineModule202601,
 			checkpointPath:     "checkpoint.txt",
-			verifier:           v,
+			verifier:           v1,
 			tileHeight:         8,
 			isTessera:          false,
 			binaryInfoFilename: ModuleInfoFilename,
