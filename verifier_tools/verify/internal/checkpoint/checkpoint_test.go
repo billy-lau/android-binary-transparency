@@ -12,7 +12,9 @@ import (
 
 func TestInvalidCheckpointFormat(t *testing.T) {
 	tests := []struct {
-		desc    string
+		desc string
+		// m represents the checkpoint message text (n.Text). A valid signed checkpoint body
+		// contains 3 newline-separated lines: <origin>\n<tree_size>\n<base64_root_hash>\n.
 		m       string
 		wantErr bool
 	}{
@@ -106,13 +108,46 @@ func TestGetSignedCheckpoint(t *testing.T) {
 	} {
 		t.Run(tt.desc, func(t *testing.T) {
 			u.Path = path.Join(u.Path, tt.path)
-			b, gotErr := getSignedCheckpoint(u.String())
+			b, gotErr := getSignedCheckpoint(u.String(), "checkpoint.txt")
 			got := string(b)
 			if diff := cmp.Diff(got, tt.want); diff != "" {
 				t.Errorf("bad response body: got %v, want %v", got, tt.want)
 			}
 			if gotErr != nil && !tt.wantErr {
 				t.Errorf("unexpected error: got %t, want %t", gotErr, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidCheckpointFormat(t *testing.T) {
+	tests := []struct {
+		desc string
+		// m represents the checkpoint message text (n.Text). A valid signed checkpoint body
+		// contains 3 newline-separated lines: <origin>\n<tree_size>\n<base64_root_hash>\n.
+		m        string
+		wantSize uint64
+	}{
+		{
+			desc:     "pixel origin",
+			m:        "developers.google.com/android/binary_transparency/0\n10\ndGhlIHZpZXcgZnJvbSB0aGUgdHJlZSB0b3BzIGlzIGdyZWF0IQ==\n",
+			wantSize: 10,
+		},
+		{
+			desc:     "google 1p apk tessera origin",
+			m:        "android.transparency.goog/google1p/apk/2026/1\n42\ndGhlIHZpZXcgZnJvbSB0aGUgdHJlZSB0b3BzIGlzIGdyZWF0IQ==\n",
+			wantSize: 42,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			root, err := parseCheckpoint(tt.m)
+			if err != nil {
+				t.Fatalf("parseCheckpoint(%q) returned error: %v", tt.m, err)
+			}
+			if root.Size != tt.wantSize {
+				t.Errorf("got size %d, want %d", root.Size, tt.wantSize)
 			}
 		})
 	}

@@ -219,3 +219,108 @@ func TestParsePackageInfosIndex(t *testing.T) {
 		})
 	}
 }
+
+func TestEntryTilePath(t *testing.T) {
+	tests := []struct {
+		tileN int64
+		w     int
+		want  string
+	}{
+		{
+			tileN: 0,
+			w:     256,
+			want:  "tile/entries/000",
+		},
+		{
+			tileN: 0,
+			w:     15,
+			want:  "tile/entries/000.p/15",
+		},
+		{
+			tileN: 1,
+			w:     256,
+			want:  "tile/entries/001",
+		},
+		{
+			tileN: 1234067,
+			w:     8,
+			want:  "tile/entries/x001/x234/067.p/8",
+		},
+	}
+
+	for _, tt := range tests {
+		got := EntryTilePath(tt.tileN, tt.w)
+		if got != tt.want {
+			t.Errorf("EntryTilePath(%d, %d) = %q, want %q", tt.tileN, tt.w, got, tt.want)
+		}
+	}
+}
+
+func TestParseEntryBundle(t *testing.T) {
+	entry1 := []byte("entry one content\n")
+	entry2 := []byte("entry two content\n")
+
+	var buf bytes.Buffer
+	buf.Write([]byte{0x00, byte(len(entry1))})
+	buf.Write(entry1)
+	buf.Write([]byte{0x00, byte(len(entry2))})
+	buf.Write(entry2)
+
+	entries, err := ParseEntryBundle(buf.Bytes())
+	if err != nil {
+		t.Fatalf("ParseEntryBundle failed: %v", err)
+	}
+
+	if len(entries) != 2 {
+		t.Fatalf("got %d entries, want 2", len(entries))
+	}
+	if !bytes.Equal(entries[0], entry1) {
+		t.Errorf("entry[0] = %q, want %q", entries[0], entry1)
+	}
+	if !bytes.Equal(entries[1], entry2) {
+		t.Errorf("entry[1] = %q, want %q", entries[1], entry2)
+	}
+
+	// Test invalid / truncated bundle
+	_, err = ParseEntryBundle([]byte{0x00, 0x10, 'a'})
+	if err == nil {
+		t.Errorf("ParseEntryBundle on truncated data expected error, got nil")
+	}
+}
+
+func TestTesseraFindPayloadIndex(t *testing.T) {
+	entry0 := []byte("hash0\nhash_desc0\npackage_name0\n100\n")
+	entry1 := []byte("hash1\nhash_desc1\npackage_name1\n101\n")
+
+	var buf bytes.Buffer
+	buf.Write([]byte{0x00, byte(len(entry0))})
+	buf.Write(entry0)
+	buf.Write([]byte{0x00, byte(len(entry1))})
+	buf.Write(entry1)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/tile/entries/000.p/2" {
+			w.Write(buf.Bytes())
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer server.Close()
+
+	idx, found, err := TesseraFindPayloadIndex(server.URL, 2, entry1)
+	if err != nil {
+		t.Fatalf("TesseraFindPayloadIndex error: %v", err)
+	}
+	if !found || idx != 1 {
+		t.Errorf("got (%d, %v), want (1, true)", idx, found)
+	}
+
+	// Search for non-existent payload
+	idx, found, err = TesseraFindPayloadIndex(server.URL, 2, []byte("non_existent"))
+	if err != nil {
+		t.Fatalf("TesseraFindPayloadIndex error: %v", err)
+	}
+	if found {
+		t.Errorf("expected found=false for non-existent payload, got %d", idx)
+	}
+}
