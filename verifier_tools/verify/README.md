@@ -39,15 +39,39 @@ The verifier uses the associated checkpoint (depending on the target log) and th
     * `https://www.gstatic.com/android/binary_transparency/mainline/2026/02/tile/` (latest Tessera-backed sharded log)
       * `https://www.gstatic.com/android/binary_transparency/mainline/2026/02/tile/entries/` (for data leaves)
 
-To run the verifier after you have built it in the previous section:
+### Verification Mode
+
+To verify that a candidate binary is included in a log:
 ```
-$ ./verifier --payload_path=${PAYLOAD_PATH} --log_type=<log_type>
+$ ./verifier --payload_path=${PAYLOAD_PATH} --log_type=<log_type> [--cache_dir=<path>]
 ```
 where `log_type` is one of the following:
   * `pixel` (for Pixel Factory Images)
   * `google_1p_code` (for Google System APKs)
   * `google_1p_apk` (for Google Product Applications)
   * `mainline_module` (for Android Mainline Modules)
+
+### Pre-fetching & Offline Cache Mode
+
+To pre-fetch and locally cache all entry tiles or legacy info files up to the current checkpoint (without requiring a payload or running an inclusion proof):
+```
+$ ./verifier --log_type=<log_type> --fetch_entries [--concurrency=16] [--cache_dir=<path>]
+```
+
+This enables:
+  * **Fast, zero-network verifications:** Subsequent verification runs read directly from local cache without multiple HTTP round trips.
+  * **Concurrent tile fetching:** Tessera entry tiles are fetched concurrently using bounded worker threads (configurable via `--concurrency`, defaulting to 16). Full tiles ($W=256$) are immutable and skipped on subsequent runs, making updates fast and incremental.
+  * **Custom cache storage:** Pass `--cache_dir` (or `--cache-dir`) to specify a custom directory for the cache. Ideal for persistent CI/CD volumes, container pre-baking, or air-gapped/offline verification bundles.
+
+### Flags
+
+| Flag | Description | Default |
+| --- | --- | --- |
+| `--log_type`, `--log-type` | Target transparency log (`pixel`, `google_1p_code`, `google_1p_apk`, `mainline_module`). Required. | `""` |
+| `--payload_path`, `--payload-path` | Path to the payload file describing the candidate binary. Required for verification mode. | `""` |
+| `--fetch_entries`, `--fetch-entries` | Pre-fetch and cache all log entries locally up to the latest checkpoint. | `false` |
+| `--concurrency` | Number of concurrent workers for fetching Tessera entry tiles. | `16` |
+| `--cache_dir`, `--cache-dir` | Custom root directory for local cache. If unspecified, defaults to system cache. | OS user cache dir |
 
 ### Input
 The verifier takes a `payload_path` and a `log_type` as input.

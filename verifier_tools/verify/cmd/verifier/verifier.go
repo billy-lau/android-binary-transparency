@@ -21,9 +21,13 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"flag"
+	"fmt"
 	"log/slog"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/android/android-binary-transparency/verifier_tools/verify/internal/checkpoint"
 	"github.com/android/android-binary-transparency/verifier_tools/verify/internal/tiles"
@@ -76,9 +80,37 @@ var googleAPKLogPubKey []byte
 var mainlineModuleLogPubKey []byte
 
 var (
-	payloadPath = flag.String("payload_path", "", "Path to the payload describing the binary of interest.")
-	logType     = flag.String("log_type", "", "Which log: 'pixel' or 'google_1p_code' or 'google_1p_apk' or 'mainline_module'.")
+	payloadPath  = flag.String("payload_path", "", "Path to the payload describing the binary of interest.")
+	logType      = flag.String("log_type", "", "Which log: 'pixel' or 'google_1p_code' or 'google_1p_apk' or 'mainline_module'.")
+	fetchEntries = flag.Bool("fetch_entries", false, "Pre-fetch and cache all entries/tiles locally for the specified --log_type, without performing an inclusion proof.")
+	concurrency  = flag.Int("concurrency", tiles.DefaultTesseraFetchConcurrency, "Number of concurrent workers for fetching Tessera entry tiles.")
+	cacheDir     = flag.String("cache_dir", "", "Custom root directory for local cache. If unspecified, defaults to system cache directory.")
 )
+
+func init() {
+	flag.StringVar(logType, "log-type", "", "Alias for --log_type.")
+	flag.StringVar(payloadPath, "payload-path", "", "Alias for --payload_path.")
+	flag.StringVar(cacheDir, "cache-dir", "", "Alias for --cache_dir.")
+	flag.BoolVar(fetchEntries, "fetch-entries", false, "Alias for --fetch_entries.")
+
+	flag.Usage = func() {
+		fmt.Fprintf(flag.CommandLine.Output(), `Usage of %s:
+
+Modes:
+  1. Verify binary inclusion in transparency log:
+     %s --log_type=<log_type> --payload_path=<path_to_payload> [--cache_dir=<path>]
+
+  2. Pre-fetch and cache entries locally for offline verification:
+     %s --log_type=<log_type> --fetch_entries [--concurrency=16] [--cache_dir=<path>]
+
+Supported log types:
+  pixel, google_1p_code, google_1p_apk, mainline_module
+
+Flags:
+`, os.Args[0], os.Args[0], os.Args[0])
+		flag.PrintDefaults()
+	}
+}
 
 type logTarget struct {
 	name                string
@@ -90,35 +122,15 @@ type logTarget struct {
 	binaryInfoFilenames []string
 }
 
-func main() {
-	flag.Parse()
-
-	if *payloadPath == "" {
-		slog.Error("must specify the payload_path for the binary payload")
-		os.Exit(1)
-	}
-	b, err := os.ReadFile(*payloadPath)
-	if err != nil {
-		slog.Error("unable to open file", "path", *payloadPath, "error", err)
-		os.Exit(1)
-	}
-	// Payload should not contain excessive leading or trailing whitespace.
-	payloadBytes := bytes.TrimSpace(b)
-	payloadBytes = append(payloadBytes, '\n')
-	if string(b) != string(payloadBytes) {
-		slog.Info("Reformatted payload content", "from", b, "to", payloadBytes)
-	}
-
+func resolveTargets(logType string) ([]logTarget, error) {
 	var targets []logTarget
-	switch *logType {
+	switch logType {
 	case "":
-		slog.Error("must specify which log to verify against using '--log_type' flag: {pixel, google_1p_code, google_1p_apk, mainline_module}")
-		os.Exit(1)
+		return nil, fmt.Errorf("must specify which log to target using '--log_type' flag: {pixel, google_1p_code, google_1p_apk, mainline_module}")
 	case "pixel":
 		v, err := checkpoint.NewVerifier(pixelLogPubKey, KeyNameForVerifierPixel)
 		if err != nil {
-			slog.Error("error creating verifier", "log", "pixel", "error", err)
-			os.Exit(1)
+			return nil, fmt.Errorf("error creating verifier for pixel log: %w", err)
 		}
 		targets = append(targets, logTarget{
 			name:                "pixel",
@@ -132,8 +144,7 @@ func main() {
 	case "google_1p_code":
 		v, err := checkpoint.NewVerifier(googleSystemAppLogPubKey, KeyNameForVerifierG1PJWT)
 		if err != nil {
-			slog.Error("error creating verifier", "log", "google_1p_code", "error", err)
-			os.Exit(1)
+			return nil, fmt.Errorf("error creating verifier for google_1p_code log: %w", err)
 		}
 		targets = append(targets, logTarget{
 			name:                "google_1p_code",
@@ -148,8 +159,7 @@ func main() {
 		// Shard 2026/02: Tessera log
 		v2, err := note.NewVerifier(NoteVerifierG1PAPK202602)
 		if err != nil {
-			slog.Error("error creating verifier for 2026/02 Tessera log", "error", err)
-			os.Exit(1)
+			return nil, fmt.Errorf("error creating verifier for 2026/02 Tessera log: %w", err)
 		}
 		targets = append(targets, logTarget{
 			name:           "google_1p_apk (2026/02 Tessera)",
@@ -163,8 +173,7 @@ func main() {
 		// Shard 2026/01: Legacy log continuation fallback
 		v1, err := checkpoint.NewVerifier(googleAPKLogPubKey, KeyNameForVerifierG1PAPK)
 		if err != nil {
-			slog.Error("error creating verifier for 2026/01 log", "error", err)
-			os.Exit(1)
+			return nil, fmt.Errorf("error creating verifier for 2026/01 log: %w", err)
 		}
 		targets = append(targets, logTarget{
 			name:                "google_1p_apk (2026/01)",
@@ -179,8 +188,7 @@ func main() {
 		// Shard 2026/02: Tessera log
 		v2, err := note.NewVerifier(NoteVerifierMainlineModule202602)
 		if err != nil {
-			slog.Error("error creating verifier for 2026/02 Tessera log", "error", err)
-			os.Exit(1)
+			return nil, fmt.Errorf("error creating verifier for 2026/02 Tessera log: %w", err)
 		}
 		targets = append(targets, logTarget{
 			name:           "mainline_module (2026/02 Tessera)",
@@ -194,8 +202,7 @@ func main() {
 		// Shard 2026/01: Legacy log continuation fallback
 		v1, err := checkpoint.NewVerifier(mainlineModuleLogPubKey, KeyNameForVerifierMainlineModule)
 		if err != nil {
-			slog.Error("error creating verifier for 2026/01 log", "error", err)
-			os.Exit(1)
+			return nil, fmt.Errorf("error creating verifier for 2026/01 log: %w", err)
 		}
 		targets = append(targets, logTarget{
 			name:                "mainline_module (2026/01)",
@@ -207,8 +214,80 @@ func main() {
 			binaryInfoFilenames: []string{ModuleInfoFilename},
 		})
 	default:
-		slog.Error("unsupported log type")
+		return nil, fmt.Errorf("unsupported log type %q", logType)
+	}
+	return targets, nil
+}
+
+func runFetchEntries(ctx context.Context, targets []logTarget, concurrency int) error {
+	for _, target := range targets {
+		slog.Info("Syncing entries for log", "log", target.name, "url", target.baseURL)
+		root, err := checkpoint.FromURLWithPath(target.baseURL, target.checkpointPath, target.verifier)
+		if err != nil {
+			return fmt.Errorf("failed to read checkpoint for %s: %w", target.name, err)
+		}
+
+		treeSize := int64(root.Size)
+		slog.Info("Resolved checkpoint tree size", "log", target.name, "treeSize", treeSize)
+
+		if target.isTessera {
+			slog.Info("Fetching Tessera entry tiles", "log", target.name, "treeSize", treeSize, "concurrency", concurrency)
+			if err := tiles.FetchAllTesseraEntries(ctx, target.baseURL, treeSize, concurrency); err != nil {
+				return fmt.Errorf("failed fetching Tessera entry tiles for %s: %w", target.name, err)
+			}
+		} else {
+			slog.Info("Fetching legacy info files", "log", target.name, "files", target.binaryInfoFilenames, "treeSize", treeSize)
+			if err := tiles.FetchAllLegacyEntries(ctx, target.baseURL, target.binaryInfoFilenames, treeSize); err != nil {
+				return fmt.Errorf("failed fetching legacy entries for %s: %w", target.name, err)
+			}
+		}
+	}
+	return nil
+}
+
+func main() {
+	flag.Parse()
+
+	if *cacheDir != "" {
+		tiles.SetCacheDir(*cacheDir)
+		slog.Info("Using custom cache directory", "path", *cacheDir)
+	}
+
+	targets, err := resolveTargets(*logType)
+	if err != nil {
+		slog.Error(err.Error())
+		flag.Usage()
 		os.Exit(1)
+	}
+
+	if *fetchEntries {
+		ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer cancel()
+
+		if err := runFetchEntries(ctx, targets, *concurrency); err != nil {
+			slog.Error("FAILURE: error fetching entries", "error", err)
+			os.Exit(1)
+		}
+		activeCacheDir, _ := tiles.CacheDir()
+		slog.Info("SUCCESS: all entries fetched and cached locally.", "cache_dir", activeCacheDir)
+		return
+	}
+
+	if *payloadPath == "" {
+		slog.Error("must specify either '--payload_path' to verify a binary, or '--fetch_entries' to pre-fetch log entries")
+		flag.Usage()
+		os.Exit(1)
+	}
+	b, err := os.ReadFile(*payloadPath)
+	if err != nil {
+		slog.Error("Unable to open file", "path", *payloadPath, "error", err)
+		os.Exit(1)
+	}
+	// Payload should not contain excessive leading or trailing whitespace.
+	payloadBytes := bytes.TrimSpace(b)
+	payloadBytes = append(payloadBytes, '\n')
+	if string(b) != string(payloadBytes) {
+		slog.Info("Reformatted payload content", "from", b, "to", payloadBytes)
 	}
 
 	var verified bool

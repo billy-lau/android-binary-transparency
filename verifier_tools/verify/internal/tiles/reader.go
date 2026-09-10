@@ -3,6 +3,7 @@ package tiles
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
@@ -15,6 +16,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/mod/sumdb/tlog"
@@ -116,23 +119,91 @@ func BinaryInfosIndex(logBaseURL string, binaryInfoFilename string, treeSize int
 	return parseBinaryInfosIndex(binaryInfos, binaryInfoFilename)
 }
 
-func readCachedInfoFile(logBaseURL string, binaryInfoFilename string, treeSize int64) ([]byte, error) {
-	cacheDir, err := os.UserCacheDir()
+var httpClient = &http.Client{
+	Timeout: 30 * time.Second,
+	Transport: &http.Transport{
+		Proxy:                 http.ProxyFromEnvironment,
+		MaxIdleConns:          100,
+		MaxIdleConnsPerHost:   32,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+	},
+}
+
+var (
+	customCacheDirMu sync.RWMutex
+	customCacheDir   string
+)
+
+// SetCacheDir configures a custom root directory for the local cache.
+// If dir is empty, the default user cache directory scheme is used.
+func SetCacheDir(dir string) {
+	customCacheDirMu.Lock()
+	defer customCacheDirMu.Unlock()
+	customCacheDir = dir
+}
+
+// CacheDir returns the active root directory used for caching.
+// If a custom directory was set via SetCacheDir, it is returned.
+// Otherwise, it returns <os.UserCacheDir>/android-binary-transparency.
+func CacheDir() (string, error) {
+	customCacheDirMu.RLock()
+	defer customCacheDirMu.RUnlock()
+	if customCacheDir != "" {
+		return customCacheDir, nil
+	}
+	userCacheDir, err := os.UserCacheDir()
 	if err != nil {
-		slog.Warn("Failed to get user cache dir, falling back to direct download", "error", err)
-		return readFromURL(logBaseURL, binaryInfoFilename)
+		return "", err
+	}
+	return filepath.Join(userCacheDir, "android-binary-transparency"), nil
+}
+
+// LogDirFromURL derives a clean relative directory path for the cache based on the log's base URL.
+// It uses the URL path, removing any redundant "android/binary_transparency" prefix.
+// If the path is empty (e.g. Pixel root or localhost test servers), it provides a sensible fallback.
+func LogDirFromURL(logBaseURL string) string {
+	u, err := url.Parse(logBaseURL)
+	if err != nil {
+		h := sha256.Sum256([]byte(logBaseURL))
+		return fmt.Sprintf("%x", h[:8])
+	}
+	p := strings.Trim(u.Path, "/")
+	p = strings.TrimPrefix(p, "android/binary_transparency")
+	p = strings.Trim(p, "/")
+	if p == "" {
+		if strings.Contains(logBaseURL, "developers.google.com") || strings.Contains(logBaseURL, "binary_transparency") {
+			return "pixel"
+		}
+		if u.Host != "" {
+			return strings.ReplaceAll(u.Host, ":", "_")
+		}
+		return "default"
+	}
+	return filepath.FromSlash(p)
+}
+
+func readCachedInfoFile(logBaseURL string, binaryInfoFilename string, treeSize int64) ([]byte, error) {
+	return readCachedInfoFileContext(context.Background(), logBaseURL, binaryInfoFilename, treeSize)
+}
+
+func readCachedInfoFileContext(ctx context.Context, logBaseURL string, binaryInfoFilename string, treeSize int64) ([]byte, error) {
+	abtCacheDir, err := CacheDir()
+	if err != nil {
+		slog.Warn("Failed to get cache dir, falling back to direct download", "error", err)
+		return readFromURLContext(ctx, logBaseURL, binaryInfoFilename)
 	}
 
-	abtCacheDir := filepath.Join(cacheDir, "android-binary-transparency")
-	if err := os.MkdirAll(abtCacheDir, 0755); err != nil {
+	logDir := LogDirFromURL(logBaseURL)
+	targetDir := filepath.Join(abtCacheDir, logDir)
+	if err := os.MkdirAll(targetDir, 0755); err != nil {
 		slog.Warn("Failed to create cache dir, falling back to direct download", "error", err)
-		return readFromURL(logBaseURL, binaryInfoFilename)
+		return readFromURLContext(ctx, logBaseURL, binaryInfoFilename)
 	}
 
-	urlHash := sha256.Sum256([]byte(logBaseURL))
-	basePrefix := fmt.Sprintf("%x_%s", urlHash[:8], binaryInfoFilename)
-	cacheFilename := fmt.Sprintf("%s_%d", basePrefix, treeSize)
-	cachePath := filepath.Join(abtCacheDir, cacheFilename)
+	cacheFilename := fmt.Sprintf("%s_%d", binaryInfoFilename, treeSize)
+	cachePath := filepath.Join(targetDir, cacheFilename)
 
 	// Try reading from cache
 	if b, err := os.ReadFile(cachePath); err == nil {
@@ -142,13 +213,13 @@ func readCachedInfoFile(logBaseURL string, binaryInfoFilename string, treeSize i
 
 	// Cache miss, download from URL
 	slog.Info("Downloading new info file", "url", logBaseURL+"/"+binaryInfoFilename)
-	b, err := readFromURL(logBaseURL, binaryInfoFilename)
+	b, err := readFromURLContext(ctx, logBaseURL, binaryInfoFilename)
 	if err != nil {
 		return nil, err
 	}
 
 	// Save to cache atomically
-	tmpFile, err := os.CreateTemp(abtCacheDir, cacheFilename+".*.tmp")
+	tmpFile, err := os.CreateTemp(targetDir, cacheFilename+".*.tmp")
 	if err != nil {
 		slog.Warn("Failed to create cache tmp file", "error", err)
 		return b, nil
@@ -177,16 +248,16 @@ func readCachedInfoFile(logBaseURL string, binaryInfoFilename string, treeSize i
 
 	slog.Debug("Saved info file to local cache", "path", cachePath)
 
-	// Cleanup old cache files for this specific log URL and filename safely
-	slog.Info("Cleaning up old cache files", "prefix", basePrefix)
-	if entries, err := os.ReadDir(abtCacheDir); err == nil {
+	// Cleanup old cache files for this specific binaryInfoFilename safely
+	slog.Info("Cleaning up old cache files", "prefix", binaryInfoFilename)
+	if entries, err := os.ReadDir(targetDir); err == nil {
 		for _, entry := range entries {
 			if entry.IsDir() {
 				continue
 			}
 
-			// Only process files that match our specific basePrefix
-			if !strings.HasPrefix(entry.Name(), basePrefix+"_") {
+			// Only process files that match our specific binaryInfoFilename prefix
+			if !strings.HasPrefix(entry.Name(), binaryInfoFilename+"_") {
 				continue
 			}
 
@@ -248,15 +319,24 @@ func parseBinaryInfosIndex(binaryInfos string, binaryInfoFilename string) (map[s
 }
 
 func readFromURL(base, suffix string) ([]byte, error) {
+	return readFromURLContext(context.Background(), base, suffix)
+}
+
+func readFromURLContext(ctx context.Context, base, suffix string) ([]byte, error) {
 	u, err := url.Parse(base)
 	if err != nil {
 		return nil, fmt.Errorf("invalid URL %s: %v", base, err)
 	}
 	u.Path = path.Join(u.Path, suffix)
 
-	resp, err := http.Get(u.String())
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
-		return nil, fmt.Errorf("http.Get(%s): %v", u.String(), err)
+		return nil, fmt.Errorf("http.NewRequestWithContext(%s): %v", u.String(), err)
+	}
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("httpClient.Do(%s): %v", u.String(), err)
 	}
 	defer resp.Body.Close()
 	if code := resp.StatusCode; code != 200 {
@@ -306,35 +386,26 @@ func ParseEntryBundle(data []byte) ([][]byte, error) {
 }
 
 func readCachedEntryTile(logBaseURL string, tileN int64, w int) ([]byte, error) {
+	return readCachedEntryTileContext(context.Background(), logBaseURL, tileN, w)
+}
+
+func readCachedEntryTileContext(ctx context.Context, logBaseURL string, tileN int64, w int) ([]byte, error) {
 	entryPath := EntryTilePath(tileN, w)
 
-	cacheDir, err := os.UserCacheDir()
+	abtCacheDir, err := CacheDir()
 	if err != nil {
-		slog.Warn("Failed to get user cache dir, falling back to direct download", "error", err)
-		b, err := readFromURL(logBaseURL, entryPath)
+		slog.Warn("Failed to get cache dir, falling back to direct download", "error", err)
+		b, err := readFromURLContext(ctx, logBaseURL, entryPath)
 		if err != nil {
 			// Fallback to tiles/entries/ if tile/entries/ fails
 			altPath := "tiles/entries/" + strings.TrimPrefix(entryPath, "tile/entries/")
-			return readFromURL(logBaseURL, altPath)
+			return readFromURLContext(ctx, logBaseURL, altPath)
 		}
 		return b, nil
 	}
 
-	abtCacheDir := filepath.Join(cacheDir, "android-binary-transparency")
-	if err := os.MkdirAll(abtCacheDir, 0755); err != nil {
-		slog.Warn("Failed to create cache dir, falling back to direct download", "error", err)
-		b, err := readFromURL(logBaseURL, entryPath)
-		if err != nil {
-			altPath := "tiles/entries/" + strings.TrimPrefix(entryPath, "tile/entries/")
-			return readFromURL(logBaseURL, altPath)
-		}
-		return b, nil
-	}
-
-	urlHash := sha256.Sum256([]byte(logBaseURL))
-	// TODO: Consider implementing cache cleanup / TTL eviction for older partial entry tiles (w < 256) as the tree grows.
-	cacheFilename := fmt.Sprintf("%x_entry_tile_%d_%d", urlHash[:8], tileN, w)
-	cachePath := filepath.Join(abtCacheDir, cacheFilename)
+	logDir := LogDirFromURL(logBaseURL)
+	cachePath := filepath.Join(abtCacheDir, logDir, filepath.FromSlash(entryPath))
 
 	// Try reading from cache
 	if b, err := os.ReadFile(cachePath); err == nil {
@@ -344,18 +415,24 @@ func readCachedEntryTile(logBaseURL string, tileN int64, w int) ([]byte, error) 
 
 	// Cache miss, download from URL
 	slog.Debug("Downloading entry tile", "url", logBaseURL+"/"+entryPath)
-	b, err := readFromURL(logBaseURL, entryPath)
+	b, err := readFromURLContext(ctx, logBaseURL, entryPath)
 	if err != nil {
 		altPath := "tiles/entries/" + strings.TrimPrefix(entryPath, "tile/entries/")
 		slog.Debug("Trying alternative entry tile path", "url", logBaseURL+"/"+altPath)
-		b, err = readFromURL(logBaseURL, altPath)
+		b, err = readFromURLContext(ctx, logBaseURL, altPath)
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	// Save to cache atomically
-	tmpFile, err := os.CreateTemp(abtCacheDir, cacheFilename+".*.tmp")
+	cacheDir := filepath.Dir(cachePath)
+	if err := os.MkdirAll(cacheDir, 0755); err != nil {
+		slog.Warn("Failed to create cache dir, falling back to direct download", "error", err)
+		return b, nil
+	}
+
+	tmpFile, err := os.CreateTemp(cacheDir, filepath.Base(cachePath)+".*.tmp")
 	if err != nil {
 		slog.Warn("Failed to create cache tmp file", "error", err)
 		return b, nil
@@ -378,7 +455,143 @@ func readCachedEntryTile(logBaseURL string, tileN int64, w int) ([]byte, error) 
 		return b, nil
 	}
 
+	// When a full tile is written, clean up any stale partial tile directory for this tile index.
+	// Partial tiles for index N reside in "<cachePath>.p" (e.g. tile/entries/000.p/15).
+	// Removing the directory is an O(1) targeted eviction that avoids scanning the parent directory.
+	if w == 256 {
+		_ = os.RemoveAll(cachePath + ".p")
+	}
+
 	return b, nil
+}
+
+func isEntryTileCached(logBaseURL string, tileN int64, w int) bool {
+	abtCacheDir, err := CacheDir()
+	if err != nil {
+		return false
+	}
+	logDir := LogDirFromURL(logBaseURL)
+	cachePath := filepath.Join(abtCacheDir, logDir, filepath.FromSlash(EntryTilePath(tileN, w)))
+	info, err := os.Stat(cachePath)
+	return err == nil && !info.IsDir() && info.Size() > 0
+}
+
+// DefaultTesseraFetchConcurrency is the default number of concurrent workers used by FetchAllTesseraEntries.
+const DefaultTesseraFetchConcurrency = 16
+
+// FetchAllLegacyEntries downloads and caches all specified legacy binary info files
+// (e.g. package_info.txt, package_info2.txt) for the given log URL and tree size.
+// Files already present in the local cache are loaded without re-downloading.
+func FetchAllLegacyEntries(ctx context.Context, logBaseURL string, filenames []string, treeSize int64) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if treeSize <= 0 {
+		return fmt.Errorf("invalid treeSize %d for legacy entries", treeSize)
+	}
+	for _, filename := range filenames {
+		slog.Info("Fetching legacy info file", "url", logBaseURL, "file", filename, "treeSize", treeSize)
+		_, err := readCachedInfoFileContext(ctx, logBaseURL, filename, treeSize)
+		if err != nil {
+			return fmt.Errorf("failed to fetch legacy info file %s: %w", filename, err)
+		}
+	}
+	return nil
+}
+
+// FetchAllTesseraEntries concurrently downloads all entry tiles up to treeSize into the local cache.
+// Tiles already cached locally are skipped, making incremental runs fast and idempotent.
+// If concurrency <= 0, DefaultTesseraFetchConcurrency is used.
+func FetchAllTesseraEntries(ctx context.Context, logBaseURL string, treeSize int64, concurrency int) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if treeSize <= 0 {
+		return nil
+	}
+	if concurrency <= 0 {
+		concurrency = DefaultTesseraFetchConcurrency
+	}
+
+	numTiles := (treeSize + 255) / 256
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	type tileTask struct {
+		tileN int64
+		w     int
+	}
+
+	taskChan := make(chan tileTask, concurrency*2)
+	var wg sync.WaitGroup
+	var firstErr error
+	var errOnce sync.Once
+	var downloadedCount atomic.Int64
+	var cachedCount atomic.Int64
+
+	for i := 0; i < concurrency; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for task := range taskChan {
+				select {
+				case <-ctx.Done():
+					return
+				default:
+				}
+
+				if isEntryTileCached(logBaseURL, task.tileN, task.w) {
+					cachedCount.Add(1)
+					continue
+				}
+
+				_, err := readCachedEntryTileContext(ctx, logBaseURL, task.tileN, task.w)
+				if err != nil {
+					errOnce.Do(func() {
+						firstErr = fmt.Errorf("failed to fetch entry tile %d (width %d): %w", task.tileN, task.w, err)
+						cancel()
+					})
+					return
+				}
+				downloaded := downloadedCount.Add(1)
+				if numTiles > 50 && downloaded%100 == 0 {
+					slog.Info("Fetching Tessera entry tiles...", "downloaded", downloaded, "total", numTiles)
+				}
+			}
+		}()
+	}
+
+	for tileN := int64(0); tileN < numTiles; tileN++ {
+		if ctx.Err() != nil {
+			break
+		}
+
+		w := 256
+		if (tileN+1)*256 > treeSize {
+			w = int(treeSize - tileN*256)
+		}
+
+		select {
+		case <-ctx.Done():
+		case taskChan <- tileTask{tileN: tileN, w: w}:
+		}
+		if ctx.Err() != nil {
+			break
+		}
+	}
+	close(taskChan)
+	wg.Wait()
+
+	if firstErr != nil {
+		return firstErr
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	slog.Info("Completed Tessera entry tiles fetch", "totalTiles", numTiles, "downloaded", downloadedCount.Load(), "alreadyCached", cachedCount.Load())
+	return nil
 }
 
 // TesseraFindPayloadIndex searches the Tessera entry tiles for targetPayload
