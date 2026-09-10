@@ -3,11 +3,16 @@ package tiles
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/hex"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"sync/atomic"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -333,3 +338,347 @@ func TestTesseraFindPayloadIndex(t *testing.T) {
 		t.Errorf("expected found=false for non-existent payload, got %d", idx)
 	}
 }
+
+func createTestEntryBundle(entries [][]byte) []byte {
+	var buf bytes.Buffer
+	for _, entry := range entries {
+		var length uint16 = uint16(len(entry))
+		binary.Write(&buf, binary.BigEndian, length)
+		buf.Write(entry)
+	}
+	return buf.Bytes()
+}
+
+func TestFetchAllLegacyEntries(t *testing.T) {
+	// Isolate user cache directory across OSes (macOS uses $HOME/Library/Caches, while Linux uses
+	// $XDG_CACHE_HOME). This ensures the test runs against a fresh, hermetic cache and does not
+	// read from or mutate the developer's actual cache.
+	tempDir := t.TempDir()
+	t.Setenv("HOME", tempDir)
+	t.Setenv("XDG_CACHE_HOME", tempDir)
+
+	file1Content := "0\nhash0\nhash_desc0\npkg0\n1\n\n1\nhash1\nhash_desc1\npkg1\n2\n"
+	file2Content := "2\nhash2\nhash_desc2\npkg2\n3\n"
+
+	var requests atomic.Int64
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		switch r.URL.Path {
+		case "/package_info.txt":
+			w.Write([]byte(file1Content))
+		case "/package_info2.txt":
+			w.Write([]byte(file2Content))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	ctx := context.Background()
+
+	// Error case: invalid treeSize <= 0
+	if err := FetchAllLegacyEntries(ctx, server.URL, []string{"package_info.txt"}, 0); err == nil {
+		t.Errorf("FetchAllLegacyEntries with treeSize 0 expected error, got nil")
+	}
+
+	// Error case: file not found (404)
+	if err := FetchAllLegacyEntries(ctx, server.URL, []string{"missing.txt"}, 3); err == nil {
+		t.Errorf("FetchAllLegacyEntries with missing file expected error, got nil")
+	}
+
+	// Success case: fetch two legacy files
+	filenames := []string{"package_info.txt", "package_info2.txt"}
+	if err := FetchAllLegacyEntries(ctx, server.URL, filenames, 3); err != nil {
+		t.Fatalf("FetchAllLegacyEntries failed: %v", err)
+	}
+
+	if got := requests.Load(); got != 3 { // 1 for missing.txt + 2 for valid files
+		t.Errorf("expected 3 server requests so far, got %d", got)
+	}
+
+	// Subsequent BinaryInfosIndex calls should hit local cache with NO additional network requests
+	m1, err := BinaryInfosIndex(server.URL, "package_info.txt", 3)
+	if err != nil {
+		t.Fatalf("BinaryInfosIndex(package_info.txt) failed: %v", err)
+	}
+	if len(m1) != 2 || m1["hash0\nhash_desc0\npkg0\n1\n"] != 0 {
+		t.Errorf("unexpected index map from package_info.txt: %+v", m1)
+	}
+
+	m2, err := BinaryInfosIndex(server.URL, "package_info2.txt", 3)
+	if err != nil {
+		t.Fatalf("BinaryInfosIndex(package_info2.txt) failed: %v", err)
+	}
+	if len(m2) != 1 || m2["hash2\nhash_desc2\npkg2\n3\n"] != 2 {
+		t.Errorf("unexpected index map from package_info2.txt: %+v", m2)
+	}
+
+	// Request count must still be 3 (zero network calls for cache hits)
+	if got := requests.Load(); got != 3 {
+		t.Errorf("expected request count to remain 3 after cached index reads, got %d", got)
+	}
+}
+
+func TestFetchAllTesseraEntries(t *testing.T) {
+	// Isolate user cache directory across OSes (macOS uses $HOME/Library/Caches, while Linux uses
+	// $XDG_CACHE_HOME). This ensures the test runs against a fresh, hermetic cache and does not
+	// read from or mutate the developer's actual cache.
+	tempDir := t.TempDir()
+	t.Setenv("HOME", tempDir)
+	t.Setenv("XDG_CACHE_HOME", tempDir)
+
+	// Build 2 tiles:
+	// Tile 0: full tile of 256 entries
+	// Tile 1: partial tile of 10 entries (treeSize = 266)
+	var tile0Entries [][]byte
+	for i := 0; i < 256; i++ {
+		tile0Entries = append(tile0Entries, []byte(fmt.Sprintf("tile0_entry_%d\n", i)))
+	}
+	tile0Data := createTestEntryBundle(tile0Entries)
+
+	var tile1Entries [][]byte
+	for i := 0; i < 10; i++ {
+		tile1Entries = append(tile1Entries, []byte(fmt.Sprintf("tile1_entry_%d\n", i)))
+	}
+	tile1Data := createTestEntryBundle(tile1Entries)
+
+	var tile0Requests atomic.Int64
+	var tile1Requests atomic.Int64
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/tile/entries/000":
+			tile0Requests.Add(1)
+			w.Write(tile0Data)
+		case "/tile/entries/001.p/10":
+			tile1Requests.Add(1)
+			w.Write(tile1Data)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	ctx := context.Background()
+
+	// treeSize 0: no-op
+	if err := FetchAllTesseraEntries(ctx, server.URL, 0, 4); err != nil {
+		t.Fatalf("FetchAllTesseraEntries with treeSize 0 returned error: %v", err)
+	}
+
+	// Fetch all tiles for treeSize 266 with concurrency 4
+	if err := FetchAllTesseraEntries(ctx, server.URL, 266, 4); err != nil {
+		t.Fatalf("FetchAllTesseraEntries(266) failed: %v", err)
+	}
+
+	if tile0Requests.Load() != 1 {
+		t.Errorf("expected 1 request for tile 0, got %d", tile0Requests.Load())
+	}
+	if tile1Requests.Load() != 1 {
+		t.Errorf("expected 1 request for tile 1, got %d", tile1Requests.Load())
+	}
+
+	// TesseraFindPayloadIndex should find payloads in both tiles using the cached tiles
+	idx0, found0, err := TesseraFindPayloadIndex(server.URL, 266, []byte("tile0_entry_42\n"))
+	if err != nil || !found0 || idx0 != 42 {
+		t.Errorf("TesseraFindPayloadIndex tile 0 = (%d, %v, %v), want (42, true, nil)", idx0, found0, err)
+	}
+
+	idx1, found1, err := TesseraFindPayloadIndex(server.URL, 266, []byte("tile1_entry_5\n"))
+	if err != nil || !found1 || idx1 != 256+5 {
+		t.Errorf("TesseraFindPayloadIndex tile 1 = (%d, %v, %v), want (261, true, nil)", idx1, found1, err)
+	}
+
+	// Second run of FetchAllTesseraEntries for the same treeSize:
+	// Tile 0 (w=256) is full and cached, so it MUST be skipped!
+	if err := FetchAllTesseraEntries(ctx, server.URL, 266, 4); err != nil {
+		t.Fatalf("second FetchAllTesseraEntries failed: %v", err)
+	}
+
+	if tile0Requests.Load() != 1 {
+		t.Errorf("expected tile 0 to be skipped on second sync, but requests increased to %d", tile0Requests.Load())
+	}
+
+	// Cancellation test: cancelled context should return context error
+	cancelCtx, cancel := context.WithCancel(context.Background())
+	cancel()
+	err = FetchAllTesseraEntries(cancelCtx, server.URL, 266, 4)
+	if err == nil {
+		t.Errorf("expected error on cancelled context, got nil")
+	}
+
+	// Server error handling: requesting a non-existent tile
+	err = FetchAllTesseraEntries(ctx, server.URL, 600, 4) // needs tile 2 which is 404
+	if err == nil {
+		t.Errorf("expected error when tile is missing (404), got nil")
+	}
+}
+
+func TestSetCacheDir(t *testing.T) {
+	customDir := t.TempDir()
+	SetCacheDir(customDir)
+	defer SetCacheDir("")
+
+	got, err := CacheDir()
+	if err != nil {
+		t.Fatalf("CacheDir() failed: %v", err)
+	}
+	if got != customDir {
+		t.Errorf("CacheDir() = %q, want %q", got, customDir)
+	}
+
+	// Verify that FetchAllLegacyEntries writes directly to the custom directory
+	fileContent := "0\nhash0\nhash_desc0\npkg0\n1\n"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(fileContent))
+	}))
+	defer server.Close()
+
+	if err := FetchAllLegacyEntries(context.Background(), server.URL, []string{"test_pkg.txt"}, 1); err != nil {
+		t.Fatalf("FetchAllLegacyEntries failed with custom cache dir: %v", err)
+	}
+
+	// Check that customDir contains the cached file
+	entries, err := os.ReadDir(customDir)
+	if err != nil {
+		t.Fatalf("failed to read custom cache dir: %v", err)
+	}
+	if len(entries) == 0 {
+		t.Errorf("expected cached file in custom directory %s, found none", customDir)
+	}
+}
+
+func TestLogDirFromURL(t *testing.T) {
+	tests := []struct {
+		url  string
+		want string
+	}{
+		{
+			url:  "https://developers.google.com/android/binary_transparency",
+			want: "pixel",
+		},
+		{
+			url:  "https://developers.google.com/android/binary_transparency/google1p",
+			want: "google1p",
+		},
+		{
+			url:  "https://www.gstatic.com/android/binary_transparency/google1p/apk/2026/01",
+			want: filepath.FromSlash("google1p/apk/2026/01"),
+		},
+		{
+			url:  "https://www.gstatic.com/android/binary_transparency/google1p/apk/2026/02",
+			want: filepath.FromSlash("google1p/apk/2026/02"),
+		},
+		{
+			url:  "https://www.gstatic.com/android/binary_transparency/mainline/2026/01",
+			want: filepath.FromSlash("mainline/2026/01"),
+		},
+		{
+			url:  "https://www.gstatic.com/android/binary_transparency/mainline/2026/02",
+			want: filepath.FromSlash("mainline/2026/02"),
+		},
+		{
+			url:  "http://127.0.0.1:8080",
+			want: "127.0.0.1_8080",
+		},
+		{
+			url:  "https://example.com/custom/shard",
+			want: filepath.FromSlash("custom/shard"),
+		},
+	}
+
+	for _, tt := range tests {
+		got := LogDirFromURL(tt.url)
+		if got != tt.want {
+			t.Errorf("LogDirFromURL(%q) = %q, want %q", tt.url, got, tt.want)
+		}
+	}
+}
+
+func TestTesseraCacheShardingAndTargetedEviction(t *testing.T) {
+	customDir := t.TempDir()
+	SetCacheDir(customDir)
+	defer SetCacheDir("")
+
+	tile0Data := createTestEntryBundle([][]byte{[]byte("tile0_item\n")})
+	tile1PartialData := createTestEntryBundle([][]byte{[]byte("tile1_partial\n")})
+	tile1FullData := createTestEntryBundle([][]byte{[]byte("tile1_full\n")})
+	deepTileData := createTestEntryBundle([][]byte{[]byte("deep_tile_entry\n")})
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/tile/entries/000":
+			w.Write(tile0Data)
+		case "/tile/entries/001.p/10":
+			w.Write(tile1PartialData)
+		case "/tile/entries/001":
+			w.Write(tile1FullData)
+		case "/tile/entries/x001/x234/067":
+			w.Write(deepTileData)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	ctx := context.Background()
+	logDir := LogDirFromURL(server.URL)
+
+	// 1. Fetch with treeSize 266:
+	// Tile 0 is full (w=256), Tile 1 is partial (w=10).
+	if err := FetchAllTesseraEntries(ctx, server.URL, 266, 2); err != nil {
+		t.Fatalf("FetchAllTesseraEntries(266) failed: %v", err)
+	}
+
+	// Verify Tile 0 is saved to sharded path: <customDir>/<logDir>/tile/entries/000
+	tile0Path := filepath.Join(customDir, logDir, "tile", "entries", "000")
+	if info, err := os.Stat(tile0Path); err != nil || info.IsDir() {
+		t.Errorf("expected full tile 0 at %s, err: %v", tile0Path, err)
+	}
+
+	// Verify Tile 1 partial is saved to: <customDir>/<logDir>/tile/entries/001.p/10
+	tile1PartialDir := filepath.Join(customDir, logDir, "tile", "entries", "001.p")
+	tile1PartialFile := filepath.Join(tile1PartialDir, "10")
+	if info, err := os.Stat(tile1PartialFile); err != nil || info.IsDir() {
+		t.Errorf("expected partial tile 1 at %s, err: %v", tile1PartialFile, err)
+	}
+
+	// Verify Tile 1 full tile does NOT exist yet
+	tile1FullPath := filepath.Join(customDir, logDir, "tile", "entries", "001")
+	if _, err := os.Stat(tile1FullPath); !os.IsNotExist(err) {
+		t.Errorf("expected full tile 1 to not exist yet at %s", tile1FullPath)
+	}
+
+	// 2. Fetch with treeSize 512:
+	// Tile 1 is now full (w=256).
+	if err := FetchAllTesseraEntries(ctx, server.URL, 512, 2); err != nil {
+		t.Fatalf("FetchAllTesseraEntries(512) failed: %v", err)
+	}
+
+	// Verify Tile 1 full tile now exists
+	if info, err := os.Stat(tile1FullPath); err != nil || info.IsDir() {
+		t.Errorf("expected full tile 1 at %s, err: %v", tile1FullPath, err)
+	}
+
+	// Verify O(1) targeted eviction: partial tile directory 001.p MUST BE REMOVED!
+	if _, err := os.Stat(tile1PartialDir); !os.IsNotExist(err) {
+		t.Errorf("expected partial tile directory %s to be evicted, but it still exists", tile1PartialDir)
+	}
+
+	// 3. Test multi-level sharding (tileN = 1234067, w = 256):
+	// Path should be tile/entries/x001/x234/067
+	// Fetch just that tile directly
+	b, err := readCachedEntryTileContext(ctx, server.URL, 1234067, 256)
+	if err != nil {
+		t.Fatalf("readCachedEntryTileContext for tile 1234067 failed: %v", err)
+	}
+	if len(b) == 0 {
+		t.Fatalf("expected non-empty bytes for tile 1234067")
+	}
+
+	deepTilePath := filepath.Join(customDir, logDir, "tile", "entries", "x001", "x234", "067")
+	if info, err := os.Stat(deepTilePath); err != nil || info.IsDir() {
+		t.Errorf("expected deep sharded tile at %s, err: %v", deepTilePath, err)
+	}
+}
+
