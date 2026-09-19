@@ -1,0 +1,13 @@
+# Build output
+dist/
+.smoke/
+
+# Dependencies
+node_modules/
+
+# Generated sample observations (regenerate with scripts/generate_sample_data.py)
+sample-data/
+
+# Editor / OS
+.DS_Store
+*.local

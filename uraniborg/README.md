@@ -27,6 +27,31 @@ Below are links to more specific documentations.
 
 ### Data Interpretation
 - [Interpreting Hubble results](docs/hubble_results.md)
+- [How to set up and run Uraniborg Explorer](docs/webui_setup.md)
+- [Uraniborg Explorer — web UI for browsing results](webui/README.md)
+
+## Uraniborg Explorer (web UI)
+
+Hubble emits eight JSON files. `webui/` contains a local, offline single-page
+app that turns them into a navigable view of the device: packages, their signing
+certificates, pregranted permissions, exported components, binary-transparency
+coverage, and build-to-build comparison against a GSI/AOSP baseline.
+
+It needs **Node.js 20 or newer** (which ships `npm`) to build and serve:
+
+```bash
+node --version   # v20 or newer
+cd uraniborg/webui
+npm install
+npm run dev
+```
+
+Then drag a Hubble results directory onto the page. Parsing happens entirely in
+the browser; observations are held in memory and never uploaded.
+
+Never used Node before, or `npm` is not on your machine? Follow
+[docs/webui_setup.md](docs/webui_setup.md) for a step-by-step first run. See
+[webui/README.md](webui/README.md) for what the UI does.
 
 ## Testing
 
