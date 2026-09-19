@@ -104,7 +104,8 @@ observation.
 - certIds: SHA256 digest(s) of certificate(s) associated with this package (for
   co-signed packages, the active co-signers; for single-signer packages, the
   signing certificate lineage or single signer). Use `signingInfo` below to
-  disambiguate active signers from key rotation lineage.
+  disambiguate active signers from key rotation lineage; see
+  [Determining Package Signing Certificate Lineage vs. Co-Signing](#determining-package-signing-certificate-lineage-vs-co-signing).
 - description: The description of the application (if available).
 - firstInstallTime: The recorded time (in ms) of the first install time of this
 package.

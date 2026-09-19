@@ -1,0 +1,40 @@
+<!doctype html>
+<!--
+  Copyright 2026 Uraniborg authors.
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+     http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      Strict CSP: this app is 100% client-side. It never talks to a network
+      origin, so we forbid every remote fetch/connect vector outright. Hubble
+      observations can contain sensitive device inventory; keeping the app
+      offline by construction means the data physically cannot leave the host.
+      (frame-ancestors is omitted here because it is only honoured via an HTTP
+      header, not a meta element; set it at the server if you host this.)
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; form-action 'none'; base-uri 'none'; object-src 'none'"
+    />
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <title>Uraniborg Explorer</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
