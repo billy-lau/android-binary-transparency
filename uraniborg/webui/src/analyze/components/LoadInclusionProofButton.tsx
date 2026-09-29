@@ -32,8 +32,8 @@
 import { useRef, useState } from 'react';
 import { FileUp, Loader2 } from 'lucide-react';
 import clsx from 'clsx';
-import { useApp } from '@/lib/store';
-import type { InputFile } from '@/lib/parse';
+import { useApp } from '@/analyze/lib/store';
+import type { InputFile } from '@/analyze/lib/parse';
 
 const PROOF_ARTIFACT = 'packages_with_inclusion_proof_signal.txt';
 

@@ -26,15 +26,15 @@
 import { useMemo } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Download, Info } from 'lucide-react';
-import { useActiveObservation } from '@/lib/store';
+import { useActiveObservation } from '@/analyze/lib/store';
 import {
   INSTALL_STATE_LABEL,
   PROOF_STATE_RANK,
   type PackageView,
-} from '@/lib/model';
-import { PageHeader } from '@/components/Layout';
-import { LoadInclusionProofButton } from '@/components/LoadInclusionProofButton';
-import { DataTable, type Column } from '@/components/DataTable';
+} from '@/analyze/lib/model';
+import { PageHeader } from '@/analyze/components/Layout';
+import { LoadInclusionProofButton } from '@/analyze/components/LoadInclusionProofButton';
+import { DataTable, type Column } from '@/analyze/components/DataTable';
 import {
   Card,
   EmptyState,
@@ -44,8 +44,9 @@ import {
   Stat,
   Toggle,
   parseProofFilter,
-} from '@/components/ui';
-import { downloadBlob, toCsv } from '@/lib/format';
+} from '@/analyze/components/ui';
+import { downloadBlob, toCsv } from '@/shared/lib/format';
+import { analyzePath } from '@/analyze/paths';
 
 const STATE_OPTIONS = PROOF_FILTER_OPTIONS;
 
@@ -171,7 +172,7 @@ export function IntegrityPage() {
   );
 
   if (!obs) {
-    return <EmptyState title="No observation loaded." hint={<Link className="link" to="/load">Load one →</Link>} />;
+    return <EmptyState title="No observation loaded." hint={<Link className="link" to={analyzePath('/load')}>Load one →</Link>} />;
   }
 
   const counts = obs.inclusionProofCounts;
@@ -212,7 +213,7 @@ export function IntegrityPage() {
             value={counts.failed}
             tone={counts.failed ? 'bad' : 'default'}
             hint="no split was found in the log"
-            to="/integrity?proof=failed"
+            to={analyzePath('/integrity?proof=failed')}
           />
           <Stat
             label="Partially in log"
@@ -225,20 +226,20 @@ export function IntegrityPage() {
                   } incomplete`
                 : 'some splits in log, not all'
             }
-            to="/integrity?proof=partial"
+            to={analyzePath('/integrity?proof=partial')}
           />
           <Stat
             label="Included in log"
             value={counts.verified}
             tone={counts.verified ? 'good' : 'default'}
             hint="every split was found"
-            to="/integrity?proof=verified"
+            to={analyzePath('/integrity?proof=verified')}
           />
           <Stat
             label="Not checked"
             value={counts.unchecked}
             hint="no proof result loaded"
-            to="/integrity?proof=unchecked"
+            to={analyzePath('/integrity?proof=unchecked')}
           />
         </div>
 
@@ -296,7 +297,7 @@ export function IntegrityPage() {
             columns={columns}
             rowKey={(p) => p.name}
             initialSort={{ columnId: 'proof', direction: 'asc' }}
-            onRowClick={(p) => navigate(`/packages/${encodeURIComponent(p.name)}?tab=transparency`)}
+            onRowClick={(p) => navigate(analyzePath(`/packages/${encodeURIComponent(p.name)}?tab=transparency`))}
             maxHeight="calc(100vh - 430px)"
           />
         </Card>

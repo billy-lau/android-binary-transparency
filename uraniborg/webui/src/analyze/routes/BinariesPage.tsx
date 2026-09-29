@@ -17,12 +17,13 @@
 import { useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Download } from 'lucide-react';
-import { useActiveObservation } from '@/lib/store';
-import { PageHeader } from '@/components/Layout';
-import { DataTable, type Column } from '@/components/DataTable';
-import { Badge, CopyButton, EmptyState, HashText, SearchInput, Tabs } from '@/components/ui';
-import { downloadBlob, formatBytes, toCsv } from '@/lib/format';
-import type { RawBinary, RawLibrary } from '@/lib/types';
+import { useActiveObservation } from '@/analyze/lib/store';
+import { PageHeader } from '@/analyze/components/Layout';
+import { DataTable, type Column } from '@/analyze/components/DataTable';
+import { Badge, CopyButton, EmptyState, HashText, SearchInput, Tabs } from '@/analyze/components/ui';
+import { downloadBlob, formatBytes, toCsv } from '@/shared/lib/format';
+import type { RawBinary, RawLibrary } from '@/analyze/lib/types';
+import { analyzePath } from '@/analyze/paths';
 
 export function BinariesPage() {
   const obs = useActiveObservation();
@@ -112,7 +113,7 @@ export function BinariesPage() {
   }, [tab]);
 
   if (!obs) {
-    return <EmptyState title="No observation loaded." hint={<Link className="link" to="/load">Load one →</Link>} />;
+    return <EmptyState title="No observation loaded." hint={<Link className="link" to={analyzePath('/load')}>Load one →</Link>} />;
   }
 
   const exportCsv = () => {

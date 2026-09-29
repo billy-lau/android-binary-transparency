@@ -258,7 +258,7 @@ at install time.
 > `scripts/python/hubble_parser.py::classify_package_signing()` case for case,
 > including its refusals — the same artifact must not read two ways depending on
 > which tool you opened it with. The web implementation is
-> [`src/lib/signing.ts`](src/lib/signing.ts) and is the only place `certIds` is
+> [`src/analyze/lib/signing.ts`](src/analyze/lib/signing.ts) and is the only place `certIds` is
 > interpreted. See
 > [Determining Package Signing Certificate Lineage vs. Co-Signing](../docs/hubble_results.md#determining-package-signing-certificate-lineage-vs-co-signing).
 
@@ -267,7 +267,7 @@ at install time.
 Permissions are tagged with the tiers from Table 2 (*Permission Mapping to
 Category and Weight*) of
 [*Uraniborg's Preloaded App Risks Scoring Metrics (2020-08) v1.0*](../docs),
-transcribed verbatim into [`src/lib/sensitivity.ts`](src/lib/sensitivity.ts).
+transcribed verbatim into [`src/analyze/lib/sensitivity.ts`](src/analyze/lib/sensitivity.ts).
 The tier is used for sorting, filtering and colour only.
 
 | Tier | Rows in Table 2 |

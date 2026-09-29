@@ -27,8 +27,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Boxes, KeyRound, Package, ShieldCheck, FileDigit } from 'lucide-react';
 import clsx from 'clsx';
-import { useActiveObservation, useApp } from '@/lib/store';
-import { shortHash, shortPermission } from '@/lib/format';
+import { useActiveObservation, useApp } from '@/analyze/lib/store';
+import { shortHash, shortPermission } from '@/shared/lib/format';
+import { analyzePath } from '@/analyze/paths';
 import { SeverityBadge } from './ui';
 
 interface Hit {
@@ -80,7 +81,7 @@ export function CommandPalette() {
           kind: 'package',
           title: p.label,
           subtitle: p.name,
-          to: `/packages/${encodeURIComponent(p.name)}`,
+          to: analyzePath(`/packages/${encodeURIComponent(p.name)}`),
           badge: p.isPlatformSigned ? <span className="text-[10px] text-sev-high">PLATFORM</span> : null,
         });
       }
@@ -96,7 +97,7 @@ export function CommandPalette() {
           kind: 'certificate',
           title: shortHash(c.hash, 24),
           subtitle: `${c.packageNames.length} package(s)`,
-          to: `/certificates/${c.hash}`,
+          to: analyzePath(`/certificates/${c.hash}`),
         });
       }
     }
@@ -111,7 +112,7 @@ export function CommandPalette() {
           kind: 'permission',
           title: shortPermission(perm.name),
           subtitle: `granted to ${perm.grantedTo.length} package(s)`,
-          to: `/permissions?q=${encodeURIComponent(perm.name)}`,
+          to: analyzePath(`/permissions?q=${encodeURIComponent(perm.name)}`),
           badge: perm.severity ? <SeverityBadge severity={perm.severity} /> : null,
         });
       }
@@ -132,7 +133,7 @@ export function CommandPalette() {
             kind: 'hash',
             title: p.name,
             subtitle: `APK/split digest match`,
-            to: `/packages/${encodeURIComponent(p.name)}`,
+            to: analyzePath(`/packages/${encodeURIComponent(p.name)}`),
           });
         }
       }
@@ -151,7 +152,7 @@ export function CommandPalette() {
             kind: 'hash',
             title: b.name,
             subtitle: b.installPath ?? '',
-            to: `/binaries?tab=${tab}&q=${encodeURIComponent(b.hash ?? '')}`,
+            to: analyzePath(`/binaries?tab=${tab}&q=${encodeURIComponent(b.hash ?? '')}`),
           });
         }
       }
@@ -169,7 +170,7 @@ export function CommandPalette() {
             kind: 'component',
             title: c.name,
             subtitle: `${c.componentType} in ${p.name}`,
-            to: `/packages/${encodeURIComponent(p.name)}?tab=components`,
+            to: analyzePath(`/packages/${encodeURIComponent(p.name)}?tab=components`),
           });
         }
       }

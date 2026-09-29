@@ -17,7 +17,7 @@
 /** App chrome: sidebar navigation, observation switcher, global shortcuts. */
 
 import { useEffect } from 'react';
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
   AlertTriangle,
   Boxes,
@@ -35,21 +35,22 @@ import {
   X,
 } from 'lucide-react';
 import clsx from 'clsx';
-import { useActiveObservation, useApp } from '@/lib/store';
+import { useActiveObservation, useApp } from '@/analyze/lib/store';
+import { analyzePath } from '@/analyze/paths';
 import { CommandPalette } from './CommandPalette';
 import { PanelResizer, useResizablePanel } from './Resizable';
 
 const NAV = [
-  { to: '/overview', label: 'Overview', icon: Telescope },
-  { to: '/packages', label: 'Packages', icon: Package },
-  { to: '/certificates', label: 'Signing certs', icon: KeyRound },
-  { to: '/shared-uids', label: 'Shared UIDs', icon: Users },
-  { to: '/permissions', label: 'Permissions', icon: ShieldCheck },
-  { to: '/components', label: 'Components', icon: Boxes },
-  { to: '/integrity', label: 'Integrity', icon: FileStack },
-  { to: '/binaries', label: 'Binaries & libs', icon: Library },
-  { to: '/device', label: 'Device & build', icon: Settings2 },
-  { to: '/compare', label: 'Compare', icon: GitCompare },
+  { to: analyzePath('/overview'), label: 'Overview', icon: Telescope },
+  { to: analyzePath('/packages'), label: 'Packages', icon: Package },
+  { to: analyzePath('/certificates'), label: 'Signing certs', icon: KeyRound },
+  { to: analyzePath('/shared-uids'), label: 'Shared UIDs', icon: Users },
+  { to: analyzePath('/permissions'), label: 'Permissions', icon: ShieldCheck },
+  { to: analyzePath('/components'), label: 'Components', icon: Boxes },
+  { to: analyzePath('/integrity'), label: 'Integrity', icon: FileStack },
+  { to: analyzePath('/binaries'), label: 'Binaries & libs', icon: Library },
+  { to: analyzePath('/device'), label: 'Device & build', icon: Settings2 },
+  { to: analyzePath('/compare'), label: 'Compare', icon: GitCompare },
 ] as const;
 
 export function Layout() {
@@ -89,13 +90,17 @@ export function Layout() {
         className="flex shrink-0 flex-col border-r border-line bg-bg-soft"
         style={{ width: sidebar.width }}
       >
-        <div className="flex items-center gap-2 px-4 py-3">
+        <Link
+          to="/"
+          title="Home: choose between observing a device and analyzing results"
+          className="flex items-center gap-2 px-4 py-3 hover:bg-bg"
+        >
           <Telescope size={18} className="text-accent" />
           <div className="leading-tight">
             <div className="text-sm font-semibold">Uraniborg</div>
             <div className="text-[10px] uppercase tracking-widest text-ink-faint">Explorer</div>
           </div>
-        </div>
+        </Link>
 
         <button
           type="button"
@@ -163,7 +168,7 @@ export function Layout() {
           ))}
           <button
             type="button"
-            onClick={() => navigate('/load')}
+            onClick={() => navigate(analyzePath('/load'))}
             className="mt-1 flex w-full items-center gap-2 rounded-md border border-dashed border-line px-2 py-1.5 text-xs text-ink-faint hover:border-accent/50 hover:text-accent"
           >
             <Upload size={12} />
@@ -178,7 +183,7 @@ export function Layout() {
         {active && (errorCount > 0 || warnCount > 0) && (
           <button
             type="button"
-            onClick={() => navigate('/device#diagnostics')}
+            onClick={() => navigate(analyzePath('/device#diagnostics'))}
             className="flex items-center gap-2 border-b border-sev-high/30 bg-sev-high/10 px-4 py-1.5 text-left text-xs text-sev-high"
           >
             <AlertTriangle size={13} />

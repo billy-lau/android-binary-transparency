@@ -28,19 +28,19 @@ import {
   ShieldCheck,
   ShieldQuestion,
 } from 'lucide-react';
-import { useActiveObservation, useApp } from '@/lib/store';
-import { INSTALL_STATE_LABEL, type ExportedComponentRef, type PackageView } from '@/lib/model';
+import { useActiveObservation, useApp } from '@/analyze/lib/store';
+import { INSTALL_STATE_LABEL, type ExportedComponentRef, type PackageView } from '@/analyze/lib/model';
 import {
   PROVIDER_GUARD_LEGEND,
   PROVIDER_OP_LABEL,
   PROVIDER_REACH_TONE,
   providerCaveats,
   providerGateSummary,
-} from '@/lib/providers';
-import { SEVERITY_ORDER, permissionSeverity } from '@/lib/sensitivity';
-import { PageHeader } from '@/components/Layout';
-import { ResizeHandle } from '@/components/ResizeHandle';
-import { LoadInclusionProofButton } from '@/components/LoadInclusionProofButton';
+} from '@/analyze/lib/providers';
+import { SEVERITY_ORDER, permissionSeverity } from '@/analyze/lib/sensitivity';
+import { PageHeader } from '@/analyze/components/Layout';
+import { ResizeHandle } from '@/shared/components/ResizeHandle';
+import { LoadInclusionProofButton } from '@/analyze/components/LoadInclusionProofButton';
 import {
   Badge,
   BrokenRobot,
@@ -56,15 +56,16 @@ import {
   SigningModeBadge,
   SigningNote,
   Tabs,
-} from '@/components/ui';
-import { currentSigner, SIGNING_MODE_LABEL } from '@/lib/signing';
+} from '@/analyze/components/ui';
+import { currentSigner, SIGNING_MODE_LABEL } from '@/analyze/lib/signing';
 import {
   downloadBlob,
   formatBytes,
   formatTimestamp,
   shortClassName,
   shortPermission,
-} from '@/lib/format';
+} from '@/shared/lib/format';
+import { analyzePath } from '@/analyze/paths';
 
 /**
  * The tab ids, as a value so the `?tab=` parameter can be validated against
@@ -107,13 +108,13 @@ export function PackageDetailPage() {
   const pkg = obs?.packagesByName.get(decodeURIComponent(name)) ?? null;
 
   if (!obs) {
-    return <EmptyState title="No observation loaded." hint={<Link className="link" to="/load">Load one →</Link>} />;
+    return <EmptyState title="No observation loaded." hint={<Link className="link" to={analyzePath('/load')}>Load one →</Link>} />;
   }
   if (!pkg) {
     return (
       <EmptyState
         title={`Package "${decodeURIComponent(name)}" is not in this observation.`}
-        hint={<Link className="link" to="/packages">Back to packages →</Link>}
+        hint={<Link className="link" to={analyzePath('/packages')}>Back to packages →</Link>}
       />
     );
   }
@@ -147,7 +148,7 @@ export function PackageDetailPage() {
         }
         actions={
           <>
-            <Link className="btn" to="/packages">
+            <Link className="btn" to={analyzePath('/packages')}>
               <ArrowLeft size={12} /> Packages
             </Link>
             <CopyButton value={pkg.name} label="Copy name" />
@@ -315,7 +316,7 @@ function OverviewTab({
             <div className="label mb-1.5">Sandbox</div>
             {raw.sharedUserId ? (
               <div className="flex items-center gap-2">
-                <Link className="mono link" to={`/packages?uid=${encodeURIComponent(raw.sharedUserId)}`}>
+                <Link className="mono link" to={analyzePath(`/packages?uid=${encodeURIComponent(raw.sharedUserId)}`)}>
                   {raw.sharedUserId}
                 </Link>
                 {pkg.hasSystemSharedUid && <Badge tone="bad">privileged</Badge>}
@@ -451,7 +452,7 @@ function PermissionsTab({
                   <span className="w-[86px] shrink-0" />
                 )}
                 <Link
-                  to={`/permissions?q=${encodeURIComponent(p.name)}`}
+                  to={analyzePath(`/permissions?q=${encodeURIComponent(p.name)}`)}
                   className="min-w-0 flex-1 truncate mono hover:text-accent"
                   title={p.name}
                 >
@@ -470,7 +471,7 @@ function PermissionsTab({
             {pkg.raw.permissionsNotGranted.filter(match).map((p) => (
               <li key={p} className="px-3 py-1.5">
                 <Link
-                  to={`/permissions?q=${encodeURIComponent(p)}`}
+                  to={analyzePath(`/permissions?q=${encodeURIComponent(p)}`)}
                   className="block truncate mono text-ink-muted hover:text-accent"
                   title={p}
                 >
@@ -554,7 +555,7 @@ function ComponentsTab({ components }: { components: ExportedComponentRef[] }) {
           />
           Only exported
         </label>
-        <Link className="link text-xs" to="/components?unguarded=1">
+        <Link className="link text-xs" to={analyzePath('/components?unguarded=1')}>
           Device-wide unguarded components →
         </Link>
       </div>

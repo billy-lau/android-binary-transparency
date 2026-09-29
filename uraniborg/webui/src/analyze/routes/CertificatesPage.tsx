@@ -30,13 +30,14 @@
 import { useMemo } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Download } from 'lucide-react';
-import { useActiveObservation } from '@/lib/store';
-import type { CertificateView } from '@/lib/model';
-import { PageHeader } from '@/components/Layout';
-import { DataTable, type Column } from '@/components/DataTable';
-import { Badge, EmptyState, SearchInput, Toggle } from '@/components/ui';
-import { downloadBlob, hashColor, pluralize, toCsv } from '@/lib/format';
-import { decodeIdentity, type CertificateIdentity } from '@/lib/x509';
+import { useActiveObservation } from '@/analyze/lib/store';
+import type { CertificateView } from '@/analyze/lib/model';
+import { PageHeader } from '@/analyze/components/Layout';
+import { DataTable, type Column } from '@/analyze/components/DataTable';
+import { Badge, EmptyState, SearchInput, Toggle } from '@/analyze/components/ui';
+import { downloadBlob, hashColor, pluralize, toCsv } from '@/shared/lib/format';
+import { decodeIdentity, type CertificateIdentity } from '@/analyze/lib/x509';
+import { analyzePath } from '@/analyze/paths';
 
 interface CertRow extends CertificateView {
   preinstalledCount: number;
@@ -278,7 +279,7 @@ export function CertificatesPage() {
   );
 
   if (!obs) {
-    return <EmptyState title="No observation loaded." hint={<Link className="link" to="/load">Load one →</Link>} />;
+    return <EmptyState title="No observation loaded." hint={<Link className="link" to={analyzePath('/load')}>Load one →</Link>} />;
   }
 
   const exportCsv = () => {
@@ -360,7 +361,7 @@ export function CertificatesPage() {
             columns={columns}
             rowKey={(c) => c.hash}
             initialSort={{ columnId: 'count', direction: 'desc' }}
-            onRowClick={(c) => navigate(`/certificates/${c.hash}`)}
+            onRowClick={(c) => navigate(analyzePath(`/certificates/${c.hash}`))}
             maxHeight="calc(100vh - 300px)"
           />
         </div>

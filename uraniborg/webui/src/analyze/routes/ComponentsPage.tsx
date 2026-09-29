@@ -17,13 +17,14 @@
 import { useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Download } from 'lucide-react';
-import { useActiveObservation } from '@/lib/store';
-import { PageHeader } from '@/components/Layout';
-import { DataTable, type Column } from '@/components/DataTable';
-import { Badge, EmptyState, SearchInput, Toggle } from '@/components/ui';
-import { shortClassName, shortPermission, toCsv, downloadBlob } from '@/lib/format';
-import { isUnguarded, type ExportedComponentRef } from '@/lib/model';
-import { PROVIDER_OP_LABEL, PROVIDER_REACH_TONE, providerGateSummary } from '@/lib/providers';
+import { useActiveObservation } from '@/analyze/lib/store';
+import { PageHeader } from '@/analyze/components/Layout';
+import { DataTable, type Column } from '@/analyze/components/DataTable';
+import { Badge, EmptyState, SearchInput, Toggle } from '@/analyze/components/ui';
+import { shortClassName, shortPermission, toCsv, downloadBlob } from '@/shared/lib/format';
+import { isUnguarded, type ExportedComponentRef } from '@/analyze/lib/model';
+import { PROVIDER_OP_LABEL, PROVIDER_REACH_TONE, providerGateSummary } from '@/analyze/lib/providers';
+import { analyzePath } from '@/analyze/paths';
 
 export function ComponentsPage() {
   const obs = useActiveObservation();
@@ -106,7 +107,7 @@ export function ComponentsPage() {
         sortValue: (c) => c.packageName,
         render: (c) => (
           <Link
-            to={`/packages/${encodeURIComponent(c.packageName)}?tab=components`}
+            to={analyzePath(`/packages/${encodeURIComponent(c.packageName)}?tab=components`)}
             className="link truncate text-sm"
           >
             {c.packageName}
@@ -202,7 +203,7 @@ export function ComponentsPage() {
   );
 
   if (!obs) {
-    return <EmptyState title="No observation loaded." hint={<Link className="link" to="/load">Load one →</Link>} />;
+    return <EmptyState title="No observation loaded." hint={<Link className="link" to={analyzePath('/load')}>Load one →</Link>} />;
   }
 
   const exportCsv = () => {

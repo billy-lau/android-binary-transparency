@@ -18,10 +18,10 @@ import { useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Download, X } from 'lucide-react';
 import clsx from 'clsx';
-import { useActiveObservation } from '@/lib/store';
-import { PageHeader } from '@/components/Layout';
-import { DataTable, type Column } from '@/components/DataTable';
-import { PanelResizer, useResizablePanel } from '@/components/Resizable';
+import { useActiveObservation } from '@/analyze/lib/store';
+import { PageHeader } from '@/analyze/components/Layout';
+import { DataTable, type Column } from '@/analyze/components/DataTable';
+import { PanelResizer, useResizablePanel } from '@/analyze/components/Resizable';
 import {
   Badge,
   EmptyState,
@@ -31,10 +31,11 @@ import {
   Toggle,
   Card,
   CopyButton,
-} from '@/components/ui';
-import { shortPermission, toCsv, downloadBlob } from '@/lib/format';
-import { SEVERITY_ORDER, severityRank } from '@/lib/sensitivity';
-import type { PermissionUsage } from '@/lib/model';
+} from '@/analyze/components/ui';
+import { shortPermission, toCsv, downloadBlob } from '@/shared/lib/format';
+import { SEVERITY_ORDER, severityRank } from '@/analyze/lib/sensitivity';
+import type { PermissionUsage } from '@/analyze/lib/model';
+import { analyzePath } from '@/analyze/paths';
 
 export function PermissionsPage() {
   const obs = useActiveObservation();
@@ -141,7 +142,7 @@ export function PermissionsPage() {
   );
 
   if (!obs) {
-    return <EmptyState title="No observation loaded." hint={<Link className="link" to="/load">Load one →</Link>} />;
+    return <EmptyState title="No observation loaded." hint={<Link className="link" to={analyzePath('/load')}>Load one →</Link>} />;
   }
 
   const exportCsv = () => {
@@ -261,7 +262,7 @@ export function PermissionsPage() {
 
                 <div>
                   <Link
-                    to={`/packages?perm=${encodeURIComponent(selectedPerm.name)}`}
+                    to={analyzePath(`/packages?perm=${encodeURIComponent(selectedPerm.name)}`)}
                     className="link text-sm"
                   >
                     Filter packages by this permission →
@@ -274,7 +275,7 @@ export function PermissionsPage() {
                     <ul className="space-y-1">
                       {selectedPerm.grantedTo.map(pkg => (
                         <li key={pkg}>
-                          <Link className="link text-sm break-all" to={`/packages/${encodeURIComponent(pkg)}`}>{pkg}</Link>
+                          <Link className="link text-sm break-all" to={analyzePath(`/packages/${encodeURIComponent(pkg)}`)}>{pkg}</Link>
                         </li>
                       ))}
                     </ul>
@@ -287,7 +288,7 @@ export function PermissionsPage() {
                     <ul className="space-y-1">
                       {selectedPerm.requestedNotGranted.map(pkg => (
                         <li key={pkg}>
-                          <Link className="link text-sm break-all" to={`/packages/${encodeURIComponent(pkg)}`}>{pkg}</Link>
+                          <Link className="link text-sm break-all" to={analyzePath(`/packages/${encodeURIComponent(pkg)}`)}>{pkg}</Link>
                         </li>
                       ))}
                     </ul>
@@ -300,7 +301,7 @@ export function PermissionsPage() {
                     <ul className="space-y-1">
                       {selectedPerm.declaredBy.map(pkg => (
                         <li key={pkg}>
-                          <Link className="link text-sm break-all" to={`/packages/${encodeURIComponent(pkg)}`}>{pkg}</Link>
+                          <Link className="link text-sm break-all" to={analyzePath(`/packages/${encodeURIComponent(pkg)}`)}>{pkg}</Link>
                         </li>
                       ))}
                     </ul>

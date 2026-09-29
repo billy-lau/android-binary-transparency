@@ -33,8 +33,8 @@ import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { ArrowDown, ArrowUp, ChevronsUpDown } from 'lucide-react';
 import clsx from 'clsx';
-import { useApp } from '@/lib/store';
-import { ResizeHandle } from '@/components/ResizeHandle';
+import { useApp } from '@/analyze/lib/store';
+import { ResizeHandle } from '@/shared/components/ResizeHandle';
 
 export interface Column<T> {
   id: string;

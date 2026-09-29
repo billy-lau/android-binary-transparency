@@ -20,19 +20,20 @@ import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 
 import { Check, Copy, Info } from 'lucide-react';
 import clsx from 'clsx';
 import { Link } from 'react-router-dom';
-import { copyText, hashColor, shortHash } from '@/lib/format';
+import { copyText, hashColor, shortHash } from '@/shared/lib/format';
 import {
   SENSITIVITY_SOURCE,
   SENSITIVITY_SOURCE_NOTE,
   type PermissionSeverity,
-} from '@/lib/sensitivity';
-import { hasSplitNotInLog, type InclusionProofState, type InclusionProofSummary } from '@/lib/model';
+} from '@/analyze/lib/sensitivity';
+import { hasSplitNotInLog, type InclusionProofState, type InclusionProofSummary } from '@/analyze/lib/model';
 import {
   describeSigning,
   SIGNING_MODE_SHORT,
   UNKNOWN_REASON_NOTE,
   type SigningFacts,
-} from '@/lib/signing';
+} from '@/analyze/lib/signing';
+import { analyzePath } from '@/analyze/paths';
 
 export function Card({
   title,
@@ -320,7 +321,7 @@ export function CertChip({
     .join(' ');
   return (
     <Link
-      to={`/certificates/${hash}`}
+      to={analyzePath(`/certificates/${hash}`)}
       title={title}
       className={clsx(
         'inline-flex items-center gap-1.5 rounded border px-1.5 py-0.5 font-mono text-[11px] transition-colors',

@@ -25,8 +25,8 @@
 
 import { useState, type PointerEvent as ReactPointerEvent } from 'react';
 import clsx from 'clsx';
-import { useApp } from '@/lib/store';
-import { beginWidthDrag, clampPx } from '@/lib/resize';
+import { useApp } from '@/analyze/lib/store';
+import { beginWidthDrag, clampPx } from '@/shared/lib/resize';
 
 const KEYBOARD_STEP_PX = 16;
 

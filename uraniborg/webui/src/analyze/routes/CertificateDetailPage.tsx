@@ -30,12 +30,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { AlertTriangle, ArrowLeft, CheckCircle2, Download, ShieldAlert, XCircle } from 'lucide-react';
-import { useActiveObservation } from '@/lib/store';
-import { INSTALL_STATE_LABEL, type PackageView } from '@/lib/model';
-import { decodeCertificate, opensslHint, type CertificateDecodeResult } from '@/lib/x509';
-import { severityRank } from '@/lib/sensitivity';
-import { PageHeader } from '@/components/Layout';
-import { DataTable, type Column } from '@/components/DataTable';
+import { useActiveObservation } from '@/analyze/lib/store';
+import { INSTALL_STATE_LABEL, type PackageView } from '@/analyze/lib/model';
+import { decodeCertificate, opensslHint, type CertificateDecodeResult } from '@/analyze/lib/x509';
+import { severityRank } from '@/analyze/lib/sensitivity';
+import { PageHeader } from '@/analyze/components/Layout';
+import { DataTable, type Column } from '@/analyze/components/DataTable';
 import {
   Badge,
   Card,
@@ -44,8 +44,9 @@ import {
   KeyValue,
   SeverityBadge,
   Stat,
-} from '@/components/ui';
-import { downloadBlob, formatBytes, hashColor, pluralize, shortHash } from '@/lib/format';
+} from '@/analyze/components/ui';
+import { downloadBlob, formatBytes, hashColor, pluralize, shortHash } from '@/shared/lib/format';
+import { analyzePath } from '@/analyze/paths';
 
 export function CertificateDetailPage() {
   const obs = useActiveObservation();
@@ -171,7 +172,7 @@ export function CertificateDetailPage() {
   );
 
   if (!obs) {
-    return <EmptyState title="No observation loaded." hint={<Link className="link" to="/load">Load one →</Link>} />;
+    return <EmptyState title="No observation loaded." hint={<Link className="link" to={analyzePath('/load')}>Load one →</Link>} />;
   }
   if (!cert) {
     return (
@@ -180,7 +181,7 @@ export function CertificateDetailPage() {
         hint={
           <>
             <span className="mono">{shortHash(hash, 24)}</span> is not referenced in this
-            observation. <Link className="link" to="/certificates">All signers →</Link>
+            observation. <Link className="link" to={analyzePath('/certificates')}>All signers →</Link>
           </>
         }
       />
@@ -206,11 +207,11 @@ export function CertificateDetailPage() {
         }
         actions={
           <>
-            <Link className="btn" to="/certificates">
+            <Link className="btn" to={analyzePath('/certificates')}>
               <ArrowLeft size={12} /> Signers
             </Link>
             <CopyButton value={cert.hash} label="Copy SHA-256" />
-            <Link className="btn btn-primary" to={`/packages?cert=${cert.hash}`}>
+            <Link className="btn btn-primary" to={analyzePath(`/packages?cert=${cert.hash}`)}>
               Filter packages
             </Link>
           </>
@@ -443,7 +444,7 @@ export function CertificateDetailPage() {
               columns={columns}
               rowKey={(p) => p.name}
               initialSort={{ columnId: 'sensitive', direction: 'asc' }}
-              onRowClick={(p) => navigate(`/packages/${encodeURIComponent(p.name)}`)}
+              onRowClick={(p) => navigate(analyzePath(`/packages/${encodeURIComponent(p.name)}`))}
               maxHeight="50vh"
               emptyMessage="No package on this device is currently signed by this certificate."
             />
@@ -463,7 +464,7 @@ export function CertificateDetailPage() {
                 columns={columns}
                 rowKey={(p) => p.name}
                 initialSort={{ columnId: 'name', direction: 'asc' }}
-                onRowClick={(p) => navigate(`/packages/${encodeURIComponent(p.name)}`)}
+                onRowClick={(p) => navigate(analyzePath(`/packages/${encodeURIComponent(p.name)}`))}
                 maxHeight="35vh"
               />
             </Card>

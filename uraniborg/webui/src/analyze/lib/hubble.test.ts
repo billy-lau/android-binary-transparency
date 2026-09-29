@@ -31,7 +31,7 @@ import {
 } from './model';
 import { providerCaveats, providerGateSummary, providerGates } from './providers';
 import { decodeIdentity } from './x509';
-import { toCsv } from './format';
+import { toCsv } from '@/shared/lib/format';
 import {
   countSensitivePermissions,
   permissionSeverity,

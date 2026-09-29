@@ -38,7 +38,7 @@
  * rather than as the presence or absence of a string.
  */
 
-import { shortPermission } from './format';
+import { shortPermission } from '@/shared/lib/format';
 import type { ExportedComponentRef } from './model';
 
 export type ProviderOp = 'read' | 'write' | 'both';

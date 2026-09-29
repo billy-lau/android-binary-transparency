@@ -19,11 +19,11 @@
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
-import { useActiveObservation } from '@/lib/store';
-import { INSTALL_STATE_LABEL, type InstallState } from '@/lib/model';
-import { SEVERITY_ORDER, severityRank, type PermissionSeverity } from '@/lib/sensitivity';
-import { SIGNING_INFO_MIN_VERSION, SIGNING_MODE_LABEL, type SigningMode } from '@/lib/signing';
-import { PageHeader } from '@/components/Layout';
+import { useActiveObservation } from '@/analyze/lib/store';
+import { INSTALL_STATE_LABEL, type InstallState } from '@/analyze/lib/model';
+import { SEVERITY_ORDER, severityRank, type PermissionSeverity } from '@/analyze/lib/sensitivity';
+import { SIGNING_INFO_MIN_VERSION, SIGNING_MODE_LABEL, type SigningMode } from '@/analyze/lib/signing';
+import { PageHeader } from '@/analyze/components/Layout';
 import {
   Badge,
   Card,
@@ -33,8 +33,9 @@ import {
   SensitivitySourceNote,
   SeverityBadge,
   Stat,
-} from '@/components/ui';
-import { pluralize, shortPermission } from '@/lib/format';
+} from '@/analyze/components/ui';
+import { pluralize, shortPermission } from '@/shared/lib/format';
+import { analyzePath } from '@/analyze/paths';
 
 const STATE_COLORS: Record<InstallState, string> = {
   'factory-apk': '#4da3ff',
@@ -119,7 +120,7 @@ export function OverviewPage() {
   }, [obs]);
 
   if (!obs || !stats) {
-    return <EmptyState title="No observation loaded." hint={<Link className="link" to="/load">Load one →</Link>} />;
+    return <EmptyState title="No observation loaded." hint={<Link className="link" to={analyzePath('/load')}>Load one →</Link>} />;
   }
 
   const preinstalled = obs.packages.filter((p) => p.raw.isPreinstalled).length;
@@ -144,33 +145,33 @@ export function OverviewPage() {
       />
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8">
-        <Stat label="Packages" value={obs.packages.length.toLocaleString()} to="/packages" />
+        <Stat label="Packages" value={obs.packages.length.toLocaleString()} to={analyzePath('/packages')} />
         <Stat
           label="Pre-installed"
           value={preinstalled.toLocaleString()}
           hint={`${obs.packages.length - preinstalled} user-installed`}
-          to="/packages?state=preinstalled"
+          to={analyzePath('/packages?state=preinstalled')}
         />
         <Stat
           label="Platform-signed"
           value={stats.platformSigned.toLocaleString()}
           hint="current signers vs platform lineage"
           tone={stats.platformSigned > 0 ? 'warn' : 'default'}
-          to="/packages?platform=1"
+          to={analyzePath('/packages?platform=1')}
         />
-        <Stat label="Signing certs" value={obs.certificates.length.toLocaleString()} to="/certificates" />
+        <Stat label="Signing certs" value={obs.certificates.length.toLocaleString()} to={analyzePath('/certificates')} />
         <Stat
           label="Unguarded exports"
           value={stats.unguarded.toLocaleString()}
           hint="packages w/ exported+unprotected components"
           tone={stats.unguarded > 0 ? 'warn' : 'good'}
-          to="/packages?unguarded=1"
+          to={analyzePath('/packages?unguarded=1')}
         />
         <Stat
           label="Cleartext traffic"
           value={stats.cleartext.toLocaleString()}
           tone={stats.cleartext > 0 ? 'warn' : 'good'}
-          to="/packages?cleartext=1"
+          to={analyzePath('/packages?cleartext=1')}
         />
         {/* Transparency coverage is shown even when no proof run was loaded, so
             the absence of the check is itself visible rather than silent.
@@ -186,7 +187,7 @@ export function OverviewPage() {
               : 'no inclusion-proof run loaded'
           }
           tone={!obs.hasInclusionProofData ? 'default' : proofCounts.failed > 0 ? 'bad' : 'good'}
-          to={obs.hasInclusionProofData ? '/packages?proof=failed' : '/integrity'}
+          to={analyzePath(obs.hasInclusionProofData ? '/packages?proof=failed' : '/integrity')}
         />
         <Stat
           label="Partially in ABT log"
@@ -209,7 +210,7 @@ export function OverviewPage() {
                   ? 'warn'
                   : 'good'
           }
-          to={obs.hasInclusionProofData ? '/packages?proof=partial' : '/integrity'}
+          to={analyzePath(obs.hasInclusionProofData ? '/packages?proof=partial' : '/integrity')}
         />
       </div>
 
@@ -247,7 +248,7 @@ export function OverviewPage() {
             <p className="mt-3 text-[11px] leading-relaxed text-ink-faint">
               Used here purely for triage. To see what this build adds on top of stock Android,
               use{' '}
-              <Link className="link" to="/compare">
+              <Link className="link" to={analyzePath('/compare')}>
                 Compare
               </Link>{' '}
               with a GSI/AOSP observation.
@@ -261,7 +262,7 @@ export function OverviewPage() {
         <Card
           title="Top signers"
           actions={
-            <Link className="btn" to="/certificates">
+            <Link className="btn" to={analyzePath('/certificates')}>
               All signers <ArrowRight size={12} />
             </Link>
           }
@@ -320,7 +321,7 @@ export function OverviewPage() {
             {stats.mostPrivileged.map((p) => (
               <li key={p.name} className="flex items-center justify-between gap-3 px-4 py-2">
                 <Link
-                  to={`/packages/${encodeURIComponent(p.name)}`}
+                  to={analyzePath(`/packages/${encodeURIComponent(p.name)}`)}
                   className="min-w-0 flex-1 truncate text-sm hover:text-accent"
                   title={p.name}
                 >
@@ -345,7 +346,7 @@ export function OverviewPage() {
             <li key={perm.name} className="flex items-center gap-3 px-4 py-2">
               {perm.severity && <SeverityBadge severity={perm.severity} />}
               <Link
-                to={`/permissions?q=${encodeURIComponent(perm.name)}`}
+                to={analyzePath(`/permissions?q=${encodeURIComponent(perm.name)}`)}
                 className="min-w-0 flex-1 truncate mono hover:text-accent"
                 title={perm.name}
               >

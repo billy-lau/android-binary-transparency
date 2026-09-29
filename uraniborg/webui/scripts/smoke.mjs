@@ -81,23 +81,23 @@ async function serve() {
 }
 
 const ROUTES = [
-  ['overview', '#/overview'],
-  ['packages', '#/packages'],
-  ['packages-filtered', '#/packages?platform=1'],
-  ['package-detail', '#/packages/com.example.oem.assistant'],
-  ['package-permissions', '#/packages/com.example.oem.assistant?tab=permissions'],
-  ['package-components', '#/packages/com.example.oem.assistant?tab=components'],
-  ['package-integrity', '#/packages/com.google.android.gms?tab=integrity'],
-  ['package-transparency', '#/packages/com.google.android.gms?tab=transparency'],
-  ['package-transparency-unchecked', '#/packages/com.android.settings?tab=transparency'],
-  ['certificates', '#/certificates'],
-  ['shared-uids', '#/shared-uids'],
-  ['permissions', '#/permissions'],
-  ['components', '#/components?unguarded=1'],
-  ['integrity', '#/integrity'],
-  ['binaries', '#/binaries'],
-  ['device', '#/device'],
-  ['compare', '#/compare'],
+  ['overview', '#/analyze/overview'],
+  ['packages', '#/analyze/packages'],
+  ['packages-filtered', '#/analyze/packages?platform=1'],
+  ['package-detail', '#/analyze/packages/com.example.oem.assistant'],
+  ['package-permissions', '#/analyze/packages/com.example.oem.assistant?tab=permissions'],
+  ['package-components', '#/analyze/packages/com.example.oem.assistant?tab=components'],
+  ['package-integrity', '#/analyze/packages/com.google.android.gms?tab=integrity'],
+  ['package-transparency', '#/analyze/packages/com.google.android.gms?tab=transparency'],
+  ['package-transparency-unchecked', '#/analyze/packages/com.android.settings?tab=transparency'],
+  ['certificates', '#/analyze/certificates'],
+  ['shared-uids', '#/analyze/shared-uids'],
+  ['permissions', '#/analyze/permissions'],
+  ['components', '#/analyze/components?unguarded=1'],
+  ['integrity', '#/analyze/integrity'],
+  ['binaries', '#/analyze/binaries'],
+  ['device', '#/analyze/device'],
+  ['compare', '#/analyze/compare'],
 ];
 
 async function loadObservation(page, dir) {
@@ -135,11 +135,62 @@ async function main() {
     });
     page.on('pageerror', (err) => errors.push(`pageerror: ${err.message}`));
 
-    await page.goto(`http://127.0.0.1:${port}/#/load`, { waitUntil: 'networkidle0' });
+    // The landing page is the entry point: both modes must be offered, and
+    // with nothing loaded yet there is nothing to continue.
+    await page.goto(`http://127.0.0.1:${port}/#/`, { waitUntil: 'networkidle0' });
+    const landing = await page.evaluate(() => ({
+      text: document.body.innerText,
+      analyzeHref: [...document.querySelectorAll('a')]
+        .find((a) => /Analyze results/.test(a.textContent ?? ''))
+        ?.getAttribute('href'),
+    }));
+    if (!/Observe a device/.test(landing.text) || !/Analyze results/.test(landing.text)) {
+      errors.push('landing: the two modes were not both offered');
+    }
+    if (landing.analyzeHref !== '#/analyze/load') {
+      errors.push(`landing: "Analyze results" links to ${landing.analyzeHref}, expected #/analyze/load`);
+    }
+    if (/Continue analysis/.test(landing.text)) {
+      errors.push('landing: offered to continue an analysis with nothing loaded');
+    }
+    await page.screenshot({ path: path.join(outDir, '00-landing.png') });
+
+    await page.goto(`http://127.0.0.1:${port}/#/analyze/load`, { waitUntil: 'networkidle0' });
     await page.screenshot({ path: path.join(outDir, '00-load.png') });
 
     await loadObservation(page, path.join(sampleRoot, 'gsi-baseline'));
     await loadObservation(page, path.join(sampleRoot, 'pixel-target'));
+
+    // The sidebar logo is the way back to the landing page, which must now
+    // offer to pick up where the analysis left off.
+    const homeHref = await page.evaluate(() => document.querySelector('aside a')?.getAttribute('href'));
+    if (homeHref !== '#/') {
+      errors.push(`analyze: the sidebar logo links to ${homeHref}, expected #/`);
+    }
+    await page.goto(`http://127.0.0.1:${port}/#/`, { waitUntil: 'networkidle0' });
+    const landingLoaded = await page.evaluate(() => document.body.innerText);
+    if (!/Continue analysis \(2 observations loaded\)/.test(landingLoaded)) {
+      errors.push('landing: no "Continue analysis" shortcut with two observations loaded');
+    }
+    await page.screenshot({ path: path.join(outDir, '00-landing-loaded.png') });
+
+    // Analyze pages used to live at the root. Saved and shared links must
+    // still land on the same page, keeping the query and the fragment.
+    for (const [from, to] of [
+      ['#/overview', '#/analyze/overview'],
+      ['#/packages?proof=failed', '#/analyze/packages?proof=failed'],
+      ['#/packages/com.google.android.gms?tab=integrity', '#/analyze/packages/com.google.android.gms?tab=integrity'],
+      ['#/device#diagnostics', '#/analyze/device#diagnostics'],
+      ['#/analyze', '#/analyze/overview'],
+      ['#/no-such-page', '#/'],
+    ]) {
+      await page.goto(`http://127.0.0.1:${port}/${from}`, { waitUntil: 'networkidle0' });
+      await new Promise((r) => setTimeout(r, 150));
+      const landed = await page.evaluate(() => location.hash);
+      if (landed !== to) {
+        errors.push(`redirect: ${from} landed on ${landed}, expected ${to}`);
+      }
+    }
 
     for (const [name, hash] of ROUTES) {
       await page.goto(`http://127.0.0.1:${port}/${hash}`, { waitUntil: 'networkidle0' });
@@ -153,7 +204,7 @@ async function main() {
 
     // Deep-link a signing certificate page by picking the platform cert.
     const platformHash = await page.evaluate(() => window.__platformCertHash());
-    await page.goto(`http://127.0.0.1:${port}/#/certificates/${platformHash}`, {
+    await page.goto(`http://127.0.0.1:${port}/#/analyze/certificates/${platformHash}`, {
       waitUntil: 'networkidle0',
     });
     await new Promise((r) => setTimeout(r, 400));
@@ -167,7 +218,7 @@ async function main() {
     await page.screenshot({ path: path.join(outDir, 'certificate-detail.png') });
 
     // Preload delta tab.
-    await page.goto(`http://127.0.0.1:${port}/#/compare`, { waitUntil: 'networkidle0' });
+    await page.goto(`http://127.0.0.1:${port}/#/analyze/compare`, { waitUntil: 'networkidle0' });
     await page.evaluate(() => {
       const btn = [...document.querySelectorAll('button')].find((b) =>
         /Preload delta/.test(b.textContent ?? ''),
@@ -181,7 +232,7 @@ async function main() {
     // Assert the reconstructed log payload and the raw record are really there,
     // otherwise the tab is just another badge.
     await page.goto(
-      `http://127.0.0.1:${port}/#/packages/com.google.android.gms?tab=transparency`,
+      `http://127.0.0.1:${port}/#/analyze/packages/com.google.android.gms?tab=transparency`,
       { waitUntil: 'networkidle0' },
     );
     await new Promise((r) => setTimeout(r, 300));
@@ -196,7 +247,7 @@ async function main() {
     // A `?tab=` the app does not recognise must say so. Silently falling back to
     // the overview would make a stale or mistyped link look like it worked, and
     // rendering nothing at all would look like a crash.
-    await page.goto(`http://127.0.0.1:${port}/#/packages/com.example.oem.assistant?tab=nope`, {
+    await page.goto(`http://127.0.0.1:${port}/#/analyze/packages/com.example.oem.assistant?tab=nope`, {
       waitUntil: 'networkidle0',
     });
     await new Promise((r) => setTimeout(r, 250));
@@ -211,7 +262,7 @@ async function main() {
 
     // Sorting has to be clearable: unsorted is the order Hubble recorded, which
     // is PackageManager's own enumeration order rather than an arbitrary one.
-    await page.goto(`http://127.0.0.1:${port}/#/packages`, { waitUntil: 'networkidle0' });
+    await page.goto(`http://127.0.0.1:${port}/#/analyze/packages`, { waitUntil: 'networkidle0' });
     await new Promise((r) => setTimeout(r, 300));
     const firstRow = () =>
       page.evaluate(() => {
@@ -247,7 +298,7 @@ async function main() {
     // Switching to the Libraries tab has to actually switch. It once issued two
     // URL updates from the same stale params, so the second silently undid the
     // first and the click did nothing.
-    await page.goto(`http://127.0.0.1:${port}/#/binaries?q=sh`, { waitUntil: 'networkidle0' });
+    await page.goto(`http://127.0.0.1:${port}/#/analyze/binaries?q=sh`, { waitUntil: 'networkidle0' });
     await new Promise((r) => setTimeout(r, 250));
     await page.evaluate(() => {
       const btn = [...document.querySelectorAll('button')].find((b) =>
@@ -266,7 +317,7 @@ async function main() {
     // "Not in" and "partially in" the transparency log are different claims.
     // The sample GMS package has one split in the log and one that is not, so
     // it must be counted as partial - never as absent from the log.
-    await page.goto(`http://127.0.0.1:${port}/#/overview`, { waitUntil: 'networkidle0' });
+    await page.goto(`http://127.0.0.1:${port}/#/analyze/overview`, { waitUntil: 'networkidle0' });
     await new Promise((r) => setTimeout(r, 250));
     const overviewText = await page.evaluate(() => document.body.innerText);
     if (!/Partially in ABT log/i.test(overviewText)) {
@@ -277,13 +328,13 @@ async function main() {
       const tile = [...document.querySelectorAll('a')].find((a) => /Unguarded exports/i.test(a.textContent ?? ''));
       return tile?.getAttribute('href') ?? null;
     });
-    if (unguardedHref !== '#/packages?unguarded=1') {
-      errors.push(`overview: "Unguarded exports" tile links to ${unguardedHref}, expected #/packages?unguarded=1`);
+    if (unguardedHref !== '#/analyze/packages?unguarded=1') {
+      errors.push(`overview: "Unguarded exports" tile links to ${unguardedHref}, expected #/analyze/packages?unguarded=1`);
     }
 
     // `/device#diagnostics` is a route fragment under the hash router, so the
     // page has to scroll to the section itself.
-    await page.goto(`http://127.0.0.1:${port}/#/device#diagnostics`, { waitUntil: 'networkidle0' });
+    await page.goto(`http://127.0.0.1:${port}/#/analyze/device#diagnostics`, { waitUntil: 'networkidle0' });
     await new Promise((r) => setTimeout(r, 250));
     const diagScroll = await page.evaluate(() => {
       const section = document.getElementById('diagnostics');
@@ -298,13 +349,13 @@ async function main() {
     } else if (Math.abs(diagScroll.offset) > 4 && !diagScroll.atBottom) {
       errors.push(`device: /device#diagnostics did not scroll to the section (offset ${diagScroll.offset}px)`);
     }
-    await page.goto(`http://127.0.0.1:${port}/#/packages?proof=partial`, { waitUntil: 'networkidle0' });
+    await page.goto(`http://127.0.0.1:${port}/#/analyze/packages?proof=partial`, { waitUntil: 'networkidle0' });
     await new Promise((r) => setTimeout(r, 250));
     const partialText = await page.evaluate(() => document.body.innerText);
     if (!/com\.google\.android\.gms/.test(partialText)) {
       errors.push('packages: ?proof=partial did not list the partially published package');
     }
-    await page.goto(`http://127.0.0.1:${port}/#/packages?proof=failed`, { waitUntil: 'networkidle0' });
+    await page.goto(`http://127.0.0.1:${port}/#/analyze/packages?proof=failed`, { waitUntil: 'networkidle0' });
     await new Promise((r) => setTimeout(r, 250));
     const failedText = await page.evaluate(() => document.body.innerText);
     if (/com\.google\.android\.gms/.test(failedText)) {
@@ -314,7 +365,7 @@ async function main() {
     // The split-name column on the Integrity tab. Split names like
     // `config.arm64_v8a` overflow any fixed width, so the boundary has to be a
     // real drag handle and not just a tooltip.
-    await page.goto(`http://127.0.0.1:${port}/#/packages/com.google.android.gms?tab=integrity`, {
+    await page.goto(`http://127.0.0.1:${port}/#/analyze/packages/com.google.android.gms?tab=integrity`, {
       waitUntil: 'networkidle0',
     });
     await new Promise((r) => setTimeout(r, 300));
@@ -348,7 +399,7 @@ async function main() {
     // Two packages in the sample data record exactly two certificates each, and
     // they mean opposite things. The whole point of consuming signingInfo is
     // that these two pages must not read the same, so assert both.
-    await page.goto(`http://127.0.0.1:${port}/#/packages/com.example.oem.assistant`, {
+    await page.goto(`http://127.0.0.1:${port}/#/analyze/packages/com.example.oem.assistant`, {
       waitUntil: 'networkidle0',
     });
     await new Promise((r) => setTimeout(r, 300));
@@ -361,7 +412,7 @@ async function main() {
     }
     await page.screenshot({ path: path.join(outDir, 'package-key-rotation.png') });
 
-    await page.goto(`http://127.0.0.1:${port}/#/packages/com.nebula.appstore`, {
+    await page.goto(`http://127.0.0.1:${port}/#/analyze/packages/com.nebula.appstore`, {
       waitUntil: 'networkidle0',
     });
     await new Promise((r) => setTimeout(r, 300));
@@ -377,7 +428,7 @@ async function main() {
     // The package that rotated away from the platform key. Android's own
     // checkSignatures() still answers MATCH for it, so this is the one case
     // where the UI must visibly disagree with the recorded verdict.
-    await page.goto(`http://127.0.0.1:${port}/#/packages/com.example.oem.launcher`, {
+    await page.goto(`http://127.0.0.1:${port}/#/analyze/packages/com.example.oem.launcher`, {
       waitUntil: 'networkidle0',
     });
     await new Promise((r) => setTimeout(r, 300));
@@ -396,7 +447,7 @@ async function main() {
     // otherwise widening the resizable column just reveals whitespace. Also
     // check the two roles that used to share the default grey are now
     // distinguishable, and that the subject peek decoded.
-    await page.goto(`http://127.0.0.1:${port}/#/certificates`, { waitUntil: 'networkidle0' });
+    await page.goto(`http://127.0.0.1:${port}/#/analyze/certificates`, { waitUntil: 'networkidle0' });
     await new Promise((r) => setTimeout(r, 400));
     const certTable = await page.evaluate(() => {
       const cells = [...document.querySelectorAll('[role="row"] .mono')];
@@ -457,7 +508,7 @@ async function main() {
     // looked like missing data, so both the abbreviation and the bare "none"
     // are regressions worth failing on.
     await page.goto(
-      `http://127.0.0.1:${port}/#/packages/com.example.oem.assistant?tab=components`,
+      `http://127.0.0.1:${port}/#/analyze/packages/com.example.oem.assistant?tab=components`,
       { waitUntil: 'networkidle0' },
     );
     await new Promise((r) => setTimeout(r, 300));
@@ -499,7 +550,7 @@ async function main() {
     // Column resizing: drag the first boundary on the components table and
     // check the column actually grew and the width was remembered. A silently
     // dead drag handle is the obvious failure mode here.
-    await page.goto(`http://127.0.0.1:${port}/#/components`, { waitUntil: 'networkidle0' });
+    await page.goto(`http://127.0.0.1:${port}/#/analyze/components`, { waitUntil: 'networkidle0' });
     await new Promise((r) => setTimeout(r, 300));
     const headerWidth = () =>
       page.evaluate(() => document.querySelector('[role="columnheader"]')?.getBoundingClientRect().width ?? 0);
@@ -528,7 +579,7 @@ async function main() {
 
     // The permissions detail pane gets the same treatment; opening it must also
     // reveal a splitter rather than a hard-coded 380px column.
-    await page.goto(`http://127.0.0.1:${port}/#/permissions`, { waitUntil: 'networkidle0' });
+    await page.goto(`http://127.0.0.1:${port}/#/analyze/permissions`, { waitUntil: 'networkidle0' });
     await new Promise((r) => setTimeout(r, 300));
     await page.evaluate(() => document.querySelector('[role="row"][tabindex="0"]')?.click());
     await new Promise((r) => setTimeout(r, 300));
@@ -542,9 +593,9 @@ async function main() {
     // measured, so every view that shows them must say where they came from.
     const citesPaper = (text) => /Preloaded App Risks Scoring Metrics.*Table 2/.test(text);
     for (const [label, route] of [
-      ['overview', '/#/overview'],
-      ['permissions', '/#/permissions'],
-      ['package-permissions', '/#/packages/com.example.oem.assistant?tab=permissions'],
+      ['overview', '/#/analyze/overview'],
+      ['permissions', '/#/analyze/permissions'],
+      ['package-permissions', '/#/analyze/packages/com.example.oem.assistant?tab=permissions'],
     ]) {
       await page.goto(`http://127.0.0.1:${port}${route}`, { waitUntil: 'networkidle0' });
       await new Promise((r) => setTimeout(r, 300));
@@ -576,7 +627,7 @@ async function main() {
       btn?.click();
     });
     await new Promise((r) => setTimeout(r, 300));
-    await page.goto(`http://127.0.0.1:${port}/#/packages/android?tab=transparency`, {
+    await page.goto(`http://127.0.0.1:${port}/#/analyze/packages/android?tab=transparency`, {
       waitUntil: 'networkidle0',
     });
     await new Promise((r) => setTimeout(r, 300));

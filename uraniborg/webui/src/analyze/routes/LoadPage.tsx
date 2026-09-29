@@ -26,9 +26,10 @@ import { useCallback, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FolderOpen, FileUp, ShieldCheck, Loader2 } from 'lucide-react';
 import clsx from 'clsx';
-import { useApp } from '@/lib/store';
-import type { InputFile } from '@/lib/parse';
-import { Card } from '@/components/ui';
+import { useApp } from '@/analyze/lib/store';
+import type { InputFile } from '@/analyze/lib/parse';
+import { Card } from '@/analyze/components/ui';
+import { analyzePath } from '@/analyze/paths';
 
 const ACCEPTED = /\.(txt|json)$/i;
 
@@ -88,7 +89,7 @@ export function LoadPage() {
           setError(outcome.error);
           return;
         }
-        navigate('/overview');
+        navigate(analyzePath('/overview'));
       } catch (err) {
         setError((err as Error).message);
       } finally {
@@ -221,7 +222,7 @@ export function LoadPage() {
       </p>
 
       {hasObservations && (
-        <button className="btn mx-auto" onClick={() => navigate('/overview')}>
+        <button className="btn mx-auto" onClick={() => navigate(analyzePath('/overview'))}>
           Back to current observation
         </button>
       )}

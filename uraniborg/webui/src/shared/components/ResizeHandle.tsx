@@ -29,7 +29,7 @@
 
 import clsx from 'clsx';
 import type { PointerEvent as ReactPointerEvent } from 'react';
-import { beginWidthDrag, clampPx } from '@/lib/resize';
+import { beginWidthDrag, clampPx } from '@/shared/lib/resize';
 
 /** Narrow enough to park a column out of the way, wide enough to stay grabbable. */
 export const MIN_COLUMN_PX = 56;

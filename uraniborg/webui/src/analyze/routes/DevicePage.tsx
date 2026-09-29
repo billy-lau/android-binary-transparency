@@ -16,10 +16,11 @@
 
 import { useEffect, useMemo } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
-import { useActiveObservation } from '@/lib/store';
-import { PageHeader } from '@/components/Layout';
-import { DataTable, type Column } from '@/components/DataTable';
-import { Card, CopyButton, EmptyState, KeyValue, SearchInput } from '@/components/ui';
+import { useActiveObservation } from '@/analyze/lib/store';
+import { PageHeader } from '@/analyze/components/Layout';
+import { DataTable, type Column } from '@/analyze/components/DataTable';
+import { Card, CopyButton, EmptyState, KeyValue, SearchInput } from '@/analyze/components/ui';
+import { analyzePath } from '@/analyze/paths';
 
 export function DevicePage() {
   const obs = useActiveObservation();
@@ -68,7 +69,7 @@ export function DevicePage() {
   ], []);
 
   if (!obs) {
-    return <EmptyState title="No observation loaded." hint={<Link className="link" to="/load">Load one →</Link>} />;
+    return <EmptyState title="No observation loaded." hint={<Link className="link" to={analyzePath('/load')}>Load one →</Link>} />;
   }
 
   const buildInfo = [

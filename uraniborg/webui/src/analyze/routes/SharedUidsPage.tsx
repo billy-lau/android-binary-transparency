@@ -16,10 +16,11 @@
 
 import { useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { useActiveObservation } from '@/lib/store';
-import { PageHeader } from '@/components/Layout';
-import { Badge, Card, CertChip, EmptyState, SearchInput, Toggle } from '@/components/ui';
-import type { SharedUidGroup } from '@/lib/model';
+import { useActiveObservation } from '@/analyze/lib/store';
+import { PageHeader } from '@/analyze/components/Layout';
+import { Badge, Card, CertChip, EmptyState, SearchInput, Toggle } from '@/analyze/components/ui';
+import type { SharedUidGroup } from '@/analyze/lib/model';
+import { analyzePath } from '@/analyze/paths';
 
 function GroupCard({ group, platformCertHash }: { group: SharedUidGroup; platformCertHash: string | null }) {
   const [expanded, setExpanded] = useState(false);
@@ -70,14 +71,14 @@ function GroupCard({ group, platformCertHash }: { group: SharedUidGroup; platfor
        {expanded && (
           <div className="p-4 border-t border-line bg-bg flex flex-col gap-2">
              <div className="text-xs">
-                <Link to={`/packages?uid=${encodeURIComponent(group.sharedUserId)}`} className="text-accent hover:underline">
+                <Link to={analyzePath(`/packages?uid=${encodeURIComponent(group.sharedUserId)}`)} className="text-accent hover:underline">
                   View all in Packages →
                 </Link>
              </div>
              <ul className="flex flex-col gap-1 mt-1">
                 {group.packageNames.map(name => (
                    <li key={name}>
-                     <Link to={`/packages/${encodeURIComponent(name)}`} className="text-[13px] hover:underline mono text-ink-muted hover:text-ink">
+                     <Link to={analyzePath(`/packages/${encodeURIComponent(name)}`)} className="text-[13px] hover:underline mono text-ink-muted hover:text-ink">
                        {name}
                      </Link>
                    </li>
@@ -111,7 +112,7 @@ export function SharedUidsPage() {
   }, [obs, q, onlySys]);
 
   if (!obs) {
-    return <EmptyState title="No observation loaded." hint={<Link className="link" to="/load">Load one →</Link>} />;
+    return <EmptyState title="No observation loaded." hint={<Link className="link" to={analyzePath('/load')}>Load one →</Link>} />;
   }
 
   return (

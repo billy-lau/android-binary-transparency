@@ -22,8 +22,8 @@ import { createRoot } from 'react-dom/client';
 // bundle from file://.
 import { HashRouter } from 'react-router-dom';
 import { App } from './App';
-import { useApp } from './lib/store';
-import type { InputFile } from './lib/parse';
+import { useApp } from '@/analyze/lib/store';
+import type { InputFile } from '@/analyze/lib/parse';
 import './index.css';
 
 const container = document.getElementById('root');

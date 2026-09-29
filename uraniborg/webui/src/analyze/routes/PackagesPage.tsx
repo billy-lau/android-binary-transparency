@@ -25,10 +25,10 @@
 import { useMemo } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Download, X } from 'lucide-react';
-import { useActiveObservation } from '@/lib/store';
-import { INSTALL_STATE_LABEL, type InstallState, type PackageView } from '@/lib/model';
-import { PageHeader } from '@/components/Layout';
-import { DataTable, type Column } from '@/components/DataTable';
+import { useActiveObservation } from '@/analyze/lib/store';
+import { INSTALL_STATE_LABEL, type InstallState, type PackageView } from '@/analyze/lib/model';
+import { PageHeader } from '@/analyze/components/Layout';
+import { DataTable, type Column } from '@/analyze/components/DataTable';
 import {
   Badge,
   CertChip,
@@ -39,10 +39,11 @@ import {
   SeverityBadge,
   Toggle,
   parseProofFilter,
-} from '@/components/ui';
-import { downloadBlob, formatBytes, formatTimestamp, toCsv } from '@/lib/format';
-import { SENSITIVITY_SOURCE, SEVERITY_ORDER, severityRank } from '@/lib/sensitivity';
-import { SIGNING_MODE_LABEL } from '@/lib/signing';
+} from '@/analyze/components/ui';
+import { downloadBlob, formatBytes, formatTimestamp, toCsv } from '@/shared/lib/format';
+import { SENSITIVITY_SOURCE, SEVERITY_ORDER, severityRank } from '@/analyze/lib/sensitivity';
+import { SIGNING_MODE_LABEL } from '@/analyze/lib/signing';
+import { analyzePath } from '@/analyze/paths';
 
 type StateFilter = 'all' | 'preinstalled' | 'user' | InstallState;
 
@@ -315,7 +316,7 @@ export function PackagesPage() {
   );
 
   if (!obs) {
-    return <EmptyState title="No observation loaded." hint={<Link className="link" to="/load">Load one →</Link>} />;
+    return <EmptyState title="No observation loaded." hint={<Link className="link" to={analyzePath('/load')}>Load one →</Link>} />;
   }
 
   const activeChips: Array<[string, string, string]> = [];
@@ -499,7 +500,7 @@ export function PackagesPage() {
             columns={columns}
             rowKey={(p) => p.name}
             initialSort={{ columnId: 'label', direction: 'asc' }}
-            onRowClick={(p) => navigate(`/packages/${encodeURIComponent(p.name)}`)}
+            onRowClick={(p) => navigate(analyzePath(`/packages/${encodeURIComponent(p.name)}`))}
             maxHeight="calc(100vh - 320px)"
           />
         </div>

@@ -24,18 +24,19 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowRight, Download, GitCompare, Info } from 'lucide-react';
-import { useApp } from '@/lib/store';
-import { computeBaselineDelta, diffObservations, type PackageDiff } from '@/lib/diff';
-import { PageHeader } from '@/components/Layout';
-import { DataTable, type Column } from '@/components/DataTable';
-import { Badge, Card, CertChip, EmptyState, SearchInput, Stat, Tabs } from '@/components/ui';
-import { downloadBlob, shortPermission, toCsv } from '@/lib/format';
-import { SENSITIVITY_SOURCE } from '@/lib/sensitivity';
+import { useApp } from '@/analyze/lib/store';
+import { computeBaselineDelta, diffObservations, type PackageDiff } from '@/analyze/lib/diff';
+import { PageHeader } from '@/analyze/components/Layout';
+import { DataTable, type Column } from '@/analyze/components/DataTable';
+import { Badge, Card, CertChip, EmptyState, SearchInput, Stat, Tabs } from '@/analyze/components/ui';
+import { downloadBlob, shortPermission, toCsv } from '@/shared/lib/format';
+import { SENSITIVITY_SOURCE } from '@/analyze/lib/sensitivity';
 import {
   SIGNER_CHANGE_LABEL,
   SIGNER_CHANGE_RANK,
   SIGNER_CHANGE_TITLE,
-} from '@/lib/signing';
+} from '@/analyze/lib/signing';
+import { analyzePath } from '@/analyze/paths';
 
 type TabId = 'changes' | 'delta';
 
@@ -179,7 +180,7 @@ export function ComparePage() {
           <>
             Load a second Hubble result set — for example the same device before and after an OTA,
             or an API-level-matched GSI/AOSP build to use as a baseline.{' '}
-            <Link className="link" to="/load">
+            <Link className="link" to={analyzePath('/load')}>
               Load another →
             </Link>
           </>
@@ -351,7 +352,7 @@ export function ComparePage() {
                     columns={columns}
                     rowKey={(d) => d.name}
                     initialSort={{ columnId: 'kind', direction: 'asc' }}
-                    onRowClick={(d) => navigate(`/packages/${encodeURIComponent(d.name)}`)}
+                    onRowClick={(d) => navigate(analyzePath(`/packages/${encodeURIComponent(d.name)}`))}
                     // The detail page reads the active observation, i.e. the
                     // target. A removed package exists only in the baseline, so
                     // following it would always land on "not in this observation".
@@ -418,7 +419,7 @@ export function ComparePage() {
                             {cat.novelPackages.slice(0, 24).map((name) => (
                               <Link
                                 key={name}
-                                to={`/packages/${encodeURIComponent(name)}`}
+                                to={analyzePath(`/packages/${encodeURIComponent(name)}`)}
                                 className="mono rounded border border-line px-1.5 py-0.5 text-[11px] text-ink-muted hover:border-accent hover:text-accent"
                               >
                                 {name}
