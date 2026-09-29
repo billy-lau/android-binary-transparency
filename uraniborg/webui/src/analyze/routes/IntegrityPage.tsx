@@ -34,17 +34,9 @@ import {
 } from '@/analyze/lib/model';
 import { PageHeader } from '@/analyze/components/Layout';
 import { LoadInclusionProofButton } from '@/analyze/components/LoadInclusionProofButton';
-import { DataTable, type Column } from '@/analyze/components/DataTable';
-import {
-  Card,
-  EmptyState,
-  PROOF_FILTER_OPTIONS,
-  ProofBadge,
-  SearchInput,
-  Stat,
-  Toggle,
-  parseProofFilter,
-} from '@/analyze/components/ui';
+import { DataTable, type Column } from '@/shared/components/DataTable';
+import { Card, EmptyState, SearchInput, Stat, Toggle } from '@/shared/components/ui';
+import { PROOF_FILTER_OPTIONS, ProofBadge, parseProofFilter } from '@/analyze/components/hubble';
 import { downloadBlob, toCsv } from '@/shared/lib/format';
 import { analyzePath } from '@/analyze/paths';
 

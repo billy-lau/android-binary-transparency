@@ -27,8 +27,9 @@ import { ArrowRight, Download, GitCompare, Info } from 'lucide-react';
 import { useApp } from '@/analyze/lib/store';
 import { computeBaselineDelta, diffObservations, type PackageDiff } from '@/analyze/lib/diff';
 import { PageHeader } from '@/analyze/components/Layout';
-import { DataTable, type Column } from '@/analyze/components/DataTable';
-import { Badge, Card, CertChip, EmptyState, SearchInput, Stat, Tabs } from '@/analyze/components/ui';
+import { DataTable, type Column } from '@/shared/components/DataTable';
+import { Badge, Card, EmptyState, SearchInput, Stat, Tabs } from '@/shared/components/ui';
+import { CertChip } from '@/analyze/components/hubble';
 import { downloadBlob, shortPermission, toCsv } from '@/shared/lib/format';
 import { SENSITIVITY_SOURCE } from '@/analyze/lib/sensitivity';
 import {

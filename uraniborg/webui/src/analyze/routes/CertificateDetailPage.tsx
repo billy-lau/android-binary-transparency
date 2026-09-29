@@ -35,16 +35,9 @@ import { INSTALL_STATE_LABEL, type PackageView } from '@/analyze/lib/model';
 import { decodeCertificate, opensslHint, type CertificateDecodeResult } from '@/analyze/lib/x509';
 import { severityRank } from '@/analyze/lib/sensitivity';
 import { PageHeader } from '@/analyze/components/Layout';
-import { DataTable, type Column } from '@/analyze/components/DataTable';
-import {
-  Badge,
-  Card,
-  CopyButton,
-  EmptyState,
-  KeyValue,
-  SeverityBadge,
-  Stat,
-} from '@/analyze/components/ui';
+import { DataTable, type Column } from '@/shared/components/DataTable';
+import { Badge, Card, CopyButton, EmptyState, KeyValue, Stat } from '@/shared/components/ui';
+import { SeverityBadge } from '@/analyze/components/hubble';
 import { downloadBlob, formatBytes, hashColor, pluralize, shortHash } from '@/shared/lib/format';
 import { analyzePath } from '@/analyze/paths';
 

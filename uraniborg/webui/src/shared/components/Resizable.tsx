@@ -25,7 +25,7 @@
 
 import { useState, type PointerEvent as ReactPointerEvent } from 'react';
 import clsx from 'clsx';
-import { useApp } from '@/analyze/lib/store';
+import { usePrefs } from '@/shared/lib/prefs';
 import { beginWidthDrag, clampPx } from '@/shared/lib/resize';
 
 const KEYBOARD_STEP_PX = 16;
@@ -56,8 +56,8 @@ export function useResizablePanel(
   panelId: string,
   { defaultWidth, min, max, edge }: { defaultWidth: number; min: number; max: number; edge: 'start' | 'end' },
 ): ResizablePanel {
-  const stored = useApp((s) => s.prefs.panelWidths[panelId]);
-  const setPanelWidth = useApp((s) => s.setPanelWidth);
+  const stored = usePrefs((s) => s.prefs.panelWidths[panelId]);
+  const setPanelWidth = usePrefs((s) => s.setPanelWidth);
   const [drag, setDrag] = useState<number | null>(null);
 
   const width = clampPx(drag ?? stored ?? defaultWidth, min, max);

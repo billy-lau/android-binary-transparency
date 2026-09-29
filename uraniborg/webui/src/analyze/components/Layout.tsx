@@ -38,7 +38,7 @@ import clsx from 'clsx';
 import { useActiveObservation, useApp } from '@/analyze/lib/store';
 import { analyzePath } from '@/analyze/paths';
 import { CommandPalette } from './CommandPalette';
-import { PanelResizer, useResizablePanel } from './Resizable';
+import { PanelResizer, useResizablePanel } from '@/shared/components/Resizable';
 
 const NAV = [
   { to: analyzePath('/overview'), label: 'Overview', icon: Telescope },

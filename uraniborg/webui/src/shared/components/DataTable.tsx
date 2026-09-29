@@ -33,7 +33,7 @@ import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { ArrowDown, ArrowUp, ChevronsUpDown } from 'lucide-react';
 import clsx from 'clsx';
-import { useApp } from '@/analyze/lib/store';
+import { usePrefs } from '@/shared/lib/prefs';
 import { ResizeHandle } from '@/shared/components/ResizeHandle';
 
 export interface Column<T> {
@@ -106,9 +106,9 @@ export function DataTable<T>({
   // Committed widths: persisted when the table is identified, in-memory
   // otherwise. `drag` holds the width while the pointer is still down so a
   // resize never writes to storage on every mouse move.
-  const storedWidths = useApp((s) => (tableId ? s.prefs.columnWidths[tableId] : undefined));
-  const setColumnWidth = useApp((s) => s.setColumnWidth);
-  const resetColumnWidths = useApp((s) => s.resetColumnWidths);
+  const storedWidths = usePrefs((s) => (tableId ? s.prefs.columnWidths[tableId] : undefined));
+  const setColumnWidth = usePrefs((s) => s.setColumnWidth);
+  const resetColumnWidths = usePrefs((s) => s.resetColumnWidths);
   const [localWidths, setLocalWidths] = useState<Record<string, number>>(NO_WIDTHS);
   const [drag, setDrag] = useState<{ columnId: string; px: number } | null>(null);
 

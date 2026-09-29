@@ -30,7 +30,7 @@ import clsx from 'clsx';
 import { useActiveObservation, useApp } from '@/analyze/lib/store';
 import { shortHash, shortPermission } from '@/shared/lib/format';
 import { analyzePath } from '@/analyze/paths';
-import { SeverityBadge } from './ui';
+import { SeverityBadge } from '@/analyze/components/hubble';
 
 interface Hit {
   id: string;

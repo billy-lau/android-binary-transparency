@@ -28,7 +28,8 @@ import {
   ShieldCheck,
   ShieldQuestion,
 } from 'lucide-react';
-import { useActiveObservation, useApp } from '@/analyze/lib/store';
+import { useActiveObservation } from '@/analyze/lib/store';
+import { usePrefs } from '@/shared/lib/prefs';
 import { INSTALL_STATE_LABEL, type ExportedComponentRef, type PackageView } from '@/analyze/lib/model';
 import {
   PROVIDER_GUARD_LEGEND,
@@ -45,18 +46,20 @@ import {
   Badge,
   BrokenRobot,
   Card,
-  CertChip,
   CopyButton,
   EmptyState,
   KeyValue,
-  ProofBadge,
   SearchInput,
+  Tabs,
+} from '@/shared/components/ui';
+import {
+  CertChip,
+  ProofBadge,
   SensitivitySourceNote,
   SeverityBadge,
   SigningModeBadge,
   SigningNote,
-  Tabs,
-} from '@/analyze/components/ui';
+} from '@/analyze/components/hubble';
 import { currentSigner, SIGNING_MODE_LABEL } from '@/analyze/lib/signing';
 import {
   downloadBlob,
@@ -667,10 +670,10 @@ function IntegrityTab({
   // and vendor-specific ones that run far longer - so any fixed width truncates
   // somebody's. The boundary is a drag handle, the same one the tables use, and
   // the width is remembered across visits like theirs.
-  const storedNameWidth = useApp(
+  const storedNameWidth = usePrefs(
     (st) => st.prefs.columnWidths[SPLIT_TABLE_ID]?.[SPLIT_NAME_COLUMN_ID],
   );
-  const setColumnWidth = useApp((st) => st.setColumnWidth);
+  const setColumnWidth = usePrefs((st) => st.setColumnWidth);
   const [nameDragPx, setNameDragPx] = useState<number | null>(null);
   const nameHeaderRef = useRef<HTMLDivElement>(null);
   const nameWidth = nameDragPx ?? storedNameWidth ?? SPLIT_NAME_DEFAULT_PX;

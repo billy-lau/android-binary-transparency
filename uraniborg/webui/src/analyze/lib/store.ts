@@ -20,8 +20,8 @@
  * Observations live in memory only. We deliberately do NOT persist parsed
  * device inventories to localStorage/IndexedDB: a Hubble observation is a full
  * inventory of a physical device and leaving it in browser storage after the
- * tab closes is a needless residual-data risk. Only lightweight, non-sensitive
- * UI preferences are persisted.
+ * tab closes is a needless residual-data risk. The lightweight, non-sensitive
+ * UI preferences that are persisted live in `@/shared/lib/prefs`.
  */
 
 import { create } from 'zustand';
@@ -32,51 +32,6 @@ import {
   type InputFile,
 } from './parse';
 import { buildObservation, type Observation } from './model';
-
-const PREFS_KEY = 'uraniborg-explorer/prefs/v1';
-
-interface Prefs {
-  density: 'comfortable' | 'compact';
-  /**
-   * User-resized table columns, in CSS pixels, keyed by table id then column
-   * id. Purely presentational, so it is safe to keep across sessions — nothing
-   * here describes the observed device.
-   */
-  columnWidths: Record<string, Record<string, number>>;
-  /** Resizable side panels (nav rail, detail panes), in CSS pixels, by panel id. */
-  panelWidths: Record<string, number>;
-}
-
-const DEFAULT_PREFS: Prefs = { density: 'comfortable', columnWidths: {}, panelWidths: {} };
-
-function loadPrefs(): Prefs {
-  try {
-    const raw = localStorage.getItem(PREFS_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw) as Partial<Prefs>;
-      return {
-        ...DEFAULT_PREFS,
-        ...parsed,
-        // Tolerate prefs written before the size overrides existed, or hand-edited.
-        columnWidths:
-          parsed.columnWidths && typeof parsed.columnWidths === 'object' ? parsed.columnWidths : {},
-        panelWidths:
-          parsed.panelWidths && typeof parsed.panelWidths === 'object' ? parsed.panelWidths : {},
-      };
-    }
-  } catch {
-    /* ignore */
-  }
-  return DEFAULT_PREFS;
-}
-
-function persistPrefs(prefs: Prefs) {
-  try {
-    localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
-  } catch {
-    /* ignore */
-  }
-}
 
 /**
  * The result of attempting to load a set of files.
@@ -93,7 +48,6 @@ interface AppState {
   observations: Observation[];
   activeId: string | null;
   baselineId: string | null;
-  prefs: Prefs;
   paletteOpen: boolean;
 
   loadFiles: (files: InputFile[], title?: string) => LoadOutcome;
@@ -113,12 +67,6 @@ interface AppState {
   setBaseline: (id: string | null) => void;
   removeObservation: (id: string) => void;
   clearAll: () => void;
-  setDensity: (d: Prefs['density']) => void;
-  /** Sets one column's width in px, or clears it when `px` is null. */
-  setColumnWidth: (tableId: string, columnId: string, px: number | null) => void;
-  resetColumnWidths: (tableId: string) => void;
-  /** Sets a panel's width in px, or clears it back to the default when null. */
-  setPanelWidth: (panelId: string, px: number | null) => void;
   setPaletteOpen: (open: boolean) => void;
 }
 
@@ -126,7 +74,6 @@ export const useApp = create<AppState>((set, get) => ({
   observations: [],
   activeId: null,
   baselineId: null,
-  prefs: loadPrefs(),
   paletteOpen: false,
 
   loadFiles: (files, title) => {
@@ -184,47 +131,6 @@ export const useApp = create<AppState>((set, get) => ({
     }),
 
   clearAll: () => set({ observations: [], activeId: null, baselineId: null }),
-
-  setDensity: (density) => {
-    const prefs = { ...get().prefs, density };
-    persistPrefs(prefs);
-    set({ prefs });
-  },
-
-  setColumnWidth: (tableId, columnId, px) => {
-    const current = get().prefs.columnWidths;
-    const table = { ...(current[tableId] ?? {}) };
-    if (px === null) delete table[columnId];
-    else table[columnId] = px;
-
-    const columnWidths = { ...current };
-    // Drop the table entry entirely once it is back to defaults, so the stored
-    // prefs do not accumulate empty objects for every table ever visited.
-    if (Object.keys(table).length === 0) delete columnWidths[tableId];
-    else columnWidths[tableId] = table;
-
-    const prefs = { ...get().prefs, columnWidths };
-    persistPrefs(prefs);
-    set({ prefs });
-  },
-
-  resetColumnWidths: (tableId) => {
-    const columnWidths = { ...get().prefs.columnWidths };
-    if (!(tableId in columnWidths)) return;
-    delete columnWidths[tableId];
-    const prefs = { ...get().prefs, columnWidths };
-    persistPrefs(prefs);
-    set({ prefs });
-  },
-
-  setPanelWidth: (panelId, px) => {
-    const panelWidths = { ...get().prefs.panelWidths };
-    if (px === null) delete panelWidths[panelId];
-    else panelWidths[panelId] = px;
-    const prefs = { ...get().prefs, panelWidths };
-    persistPrefs(prefs);
-    set({ prefs });
-  },
 
   setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
 }));

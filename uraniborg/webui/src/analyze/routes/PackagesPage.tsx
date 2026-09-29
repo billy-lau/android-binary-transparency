@@ -28,18 +28,15 @@ import { Download, X } from 'lucide-react';
 import { useActiveObservation } from '@/analyze/lib/store';
 import { INSTALL_STATE_LABEL, type InstallState, type PackageView } from '@/analyze/lib/model';
 import { PageHeader } from '@/analyze/components/Layout';
-import { DataTable, type Column } from '@/analyze/components/DataTable';
+import { DataTable, type Column } from '@/shared/components/DataTable';
+import { Badge, EmptyState, SearchInput, Toggle } from '@/shared/components/ui';
 import {
-  Badge,
   CertChip,
-  EmptyState,
   PROOF_FILTER_OPTIONS,
   ProofBadge,
-  SearchInput,
   SeverityBadge,
-  Toggle,
   parseProofFilter,
-} from '@/analyze/components/ui';
+} from '@/analyze/components/hubble';
 import { downloadBlob, formatBytes, formatTimestamp, toCsv } from '@/shared/lib/format';
 import { SENSITIVITY_SOURCE, SEVERITY_ORDER, severityRank } from '@/analyze/lib/sensitivity';
 import { SIGNING_MODE_LABEL } from '@/analyze/lib/signing';

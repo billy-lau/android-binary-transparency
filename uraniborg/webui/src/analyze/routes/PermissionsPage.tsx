@@ -20,18 +20,10 @@ import { Download, X } from 'lucide-react';
 import clsx from 'clsx';
 import { useActiveObservation } from '@/analyze/lib/store';
 import { PageHeader } from '@/analyze/components/Layout';
-import { DataTable, type Column } from '@/analyze/components/DataTable';
-import { PanelResizer, useResizablePanel } from '@/analyze/components/Resizable';
-import {
-  Badge,
-  EmptyState,
-  SearchInput,
-  SensitivitySourceNote,
-  SeverityBadge,
-  Toggle,
-  Card,
-  CopyButton,
-} from '@/analyze/components/ui';
+import { DataTable, type Column } from '@/shared/components/DataTable';
+import { PanelResizer, useResizablePanel } from '@/shared/components/Resizable';
+import { Badge, EmptyState, SearchInput, Toggle, Card, CopyButton } from '@/shared/components/ui';
+import { SensitivitySourceNote, SeverityBadge } from '@/analyze/components/hubble';
 import { shortPermission, toCsv, downloadBlob } from '@/shared/lib/format';
 import { SEVERITY_ORDER, severityRank } from '@/analyze/lib/sensitivity';
 import type { PermissionUsage } from '@/analyze/lib/model';

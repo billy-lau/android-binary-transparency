@@ -24,16 +24,8 @@ import { INSTALL_STATE_LABEL, type InstallState } from '@/analyze/lib/model';
 import { SEVERITY_ORDER, severityRank, type PermissionSeverity } from '@/analyze/lib/sensitivity';
 import { SIGNING_INFO_MIN_VERSION, SIGNING_MODE_LABEL, type SigningMode } from '@/analyze/lib/signing';
 import { PageHeader } from '@/analyze/components/Layout';
-import {
-  Badge,
-  Card,
-  CertChip,
-  EmptyState,
-  Meter,
-  SensitivitySourceNote,
-  SeverityBadge,
-  Stat,
-} from '@/analyze/components/ui';
+import { Badge, Card, EmptyState, Meter, Stat } from '@/shared/components/ui';
+import { CertChip, SensitivitySourceNote, SeverityBadge } from '@/analyze/components/hubble';
 import { pluralize, shortPermission } from '@/shared/lib/format';
 import { analyzePath } from '@/analyze/paths';
 

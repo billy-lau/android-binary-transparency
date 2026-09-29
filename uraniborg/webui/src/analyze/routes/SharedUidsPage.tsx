@@ -18,7 +18,8 @@ import { useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useActiveObservation } from '@/analyze/lib/store';
 import { PageHeader } from '@/analyze/components/Layout';
-import { Badge, Card, CertChip, EmptyState, SearchInput, Toggle } from '@/analyze/components/ui';
+import { Badge, Card, EmptyState, SearchInput, Toggle } from '@/shared/components/ui';
+import { CertChip } from '@/analyze/components/hubble';
 import type { SharedUidGroup } from '@/analyze/lib/model';
 import { analyzePath } from '@/analyze/paths';
 

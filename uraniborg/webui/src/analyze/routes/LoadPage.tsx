@@ -28,7 +28,7 @@ import { FolderOpen, FileUp, ShieldCheck, Loader2 } from 'lucide-react';
 import clsx from 'clsx';
 import { useApp } from '@/analyze/lib/store';
 import type { InputFile } from '@/analyze/lib/parse';
-import { Card } from '@/analyze/components/ui';
+import { Card } from '@/shared/components/ui';
 import { analyzePath } from '@/analyze/paths';
 
 const ACCEPTED = /\.(txt|json)$/i;
