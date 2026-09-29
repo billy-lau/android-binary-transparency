@@ -1,0 +1,595 @@
+{
+  "description": "Observe options -> automate_observation.py argv. Run by server/tests/test_options.py against options.normalize()/build_argv(), and by the browser's mirror (Phase 3), so the two cannot drift. Filesystem checks are out of scope here.",
+  "defaultOutput": "/default/results",
+  "cases": [
+    {
+      "name": "empty options use every default",
+      "options": {},
+      "argv": [
+        "--output=/default/results"
+      ]
+    },
+    {
+      "name": "null sections are treated as absent",
+      "options": {
+        "serials": null,
+        "hubble": null,
+        "output": null,
+        "debug": null,
+        "pullApks": null,
+        "inclusionProof": null
+      },
+      "argv": [
+        "--output=/default/results"
+      ]
+    },
+    {
+      "name": "serials are repeated in order, as --serial=",
+      "options": {
+        "serials": [
+          "emulator-5554",
+          "192.168.1.5:5555"
+        ]
+      },
+      "argv": [
+        "--serial=emulator-5554",
+        "--serial=192.168.1.5:5555",
+        "--output=/default/results"
+      ]
+    },
+    {
+      "name": "a serial starting with a dash stays one value",
+      "options": {
+        "serials": [
+          "-weird"
+        ]
+      },
+      "argv": [
+        "--serial=-weird",
+        "--output=/default/results"
+      ]
+    },
+    {
+      "name": "hubble apk mode passes the path",
+      "options": {
+        "hubble": {
+          "mode": "apk",
+          "path": "/opt/hubble.apk"
+        }
+      },
+      "argv": [
+        "--hubble=/opt/hubble.apk",
+        "--output=/default/results"
+      ]
+    },
+    {
+      "name": "rebuild mode ignores a leftover path",
+      "options": {
+        "hubble": {
+          "mode": "rebuild",
+          "path": "relative/ignored.apk"
+        }
+      },
+      "argv": [
+        "--output=/default/results"
+      ]
+    },
+    {
+      "name": "explicit output",
+      "options": {
+        "output": "/data/out"
+      },
+      "argv": [
+        "--output=/data/out"
+      ]
+    },
+    {
+      "name": "blank output falls back to the default",
+      "options": {
+        "output": "   "
+      },
+      "argv": [
+        "--output=/default/results"
+      ]
+    },
+    {
+      "name": "debug",
+      "options": {
+        "debug": true
+      },
+      "argv": [
+        "--output=/default/results",
+        "--debug"
+      ]
+    },
+    {
+      "name": "pull all apks",
+      "options": {
+        "pullApks": "all"
+      },
+      "argv": [
+        "--output=/default/results",
+        "--pull-all-apks"
+      ]
+    },
+    {
+      "name": "pull pre-installed apks only",
+      "options": {
+        "pullApks": "preinstalled"
+      },
+      "argv": [
+        "--output=/default/results",
+        "--pull-preinstalled-apks-only"
+      ]
+    },
+    {
+      "name": "inclusion proof with defaults",
+      "options": {
+        "inclusionProof": {
+          "enabled": true,
+          "verifierPath": "/opt/verifier"
+        }
+      },
+      "argv": [
+        "--output=/default/results",
+        "--perform_inclusion_proof_check",
+        "--verifier_path=/opt/verifier"
+      ]
+    },
+    {
+      "name": "inclusion proof with every option",
+      "options": {
+        "inclusionProof": {
+          "enabled": true,
+          "verifierPath": "/opt/verifier",
+          "preinstalledOnly": true,
+          "cacheDir": "/tmp/cache",
+          "prefetchConcurrency": 4,
+          "prefetchTimeout": 30
+        }
+      },
+      "argv": [
+        "--output=/default/results",
+        "--perform_inclusion_proof_check",
+        "--verifier_path=/opt/verifier",
+        "--check_preinstalled_only",
+        "--cache_dir=/tmp/cache",
+        "--cache_prefetch_concurrency=4",
+        "--cache_prefetch_timeout=30"
+      ]
+    },
+    {
+      "name": "default prefetch tuning is not passed",
+      "options": {
+        "inclusionProof": {
+          "enabled": true,
+          "verifierPath": "/opt/verifier",
+          "prefetchConcurrency": 16,
+          "prefetchTimeout": 600
+        }
+      },
+      "argv": [
+        "--output=/default/results",
+        "--perform_inclusion_proof_check",
+        "--verifier_path=/opt/verifier"
+      ]
+    },
+    {
+      "name": "no prefetch drops the tuning, even when invalid, but keeps the cache dir",
+      "options": {
+        "inclusionProof": {
+          "enabled": true,
+          "verifierPath": "/opt/verifier",
+          "noPrefetch": true,
+          "cacheDir": "/tmp/cache",
+          "prefetchConcurrency": 999,
+          "prefetchTimeout": "x"
+        }
+      },
+      "argv": [
+        "--output=/default/results",
+        "--perform_inclusion_proof_check",
+        "--verifier_path=/opt/verifier",
+        "--no_prefetch",
+        "--cache_dir=/tmp/cache"
+      ]
+    },
+    {
+      "name": "a disabled inclusion proof drops all its fields, even when invalid",
+      "options": {
+        "inclusionProof": {
+          "enabled": false,
+          "verifierPath": "relative",
+          "noPrefetch": "yes",
+          "prefetchConcurrency": 0
+        }
+      },
+      "argv": [
+        "--output=/default/results"
+      ]
+    },
+    {
+      "name": "everything at once, in argv order",
+      "options": {
+        "serials": [
+          "A1"
+        ],
+        "hubble": {
+          "mode": "apk",
+          "path": "/h.apk"
+        },
+        "output": "/o",
+        "debug": true,
+        "pullApks": "all",
+        "inclusionProof": {
+          "enabled": true,
+          "verifierPath": "/v",
+          "noPrefetch": true
+        }
+      },
+      "argv": [
+        "--serial=A1",
+        "--hubble=/h.apk",
+        "--output=/o",
+        "--debug",
+        "--pull-all-apks",
+        "--perform_inclusion_proof_check",
+        "--verifier_path=/v",
+        "--no_prefetch"
+      ]
+    },
+    {
+      "name": "options must be an object",
+      "options": [],
+      "errors": [
+        ""
+      ]
+    },
+    {
+      "name": "unknown top-level key",
+      "options": {
+        "shell": "rm -rf /"
+      },
+      "errors": [
+        "shell"
+      ]
+    },
+    {
+      "name": "unknown hubble key",
+      "options": {
+        "hubble": {
+          "mode": "apk",
+          "path": "/h.apk",
+          "extra": 1
+        }
+      },
+      "errors": [
+        "hubble.extra"
+      ]
+    },
+    {
+      "name": "unknown inclusion proof key",
+      "options": {
+        "inclusionProof": {
+          "enabled": false,
+          "verbose": true
+        }
+      },
+      "errors": [
+        "inclusionProof.verbose"
+      ]
+    },
+    {
+      "name": "serials must be a list",
+      "options": {
+        "serials": "emulator-5554"
+      },
+      "errors": [
+        "serials"
+      ]
+    },
+    {
+      "name": "serials must not be empty strings",
+      "options": {
+        "serials": [
+          ""
+        ]
+      },
+      "errors": [
+        "serials"
+      ]
+    },
+    {
+      "name": "serials must not contain whitespace",
+      "options": {
+        "serials": [
+          "a b"
+        ]
+      },
+      "errors": [
+        "serials"
+      ]
+    },
+    {
+      "name": "serials must not repeat",
+      "options": {
+        "serials": [
+          "A1",
+          "A1"
+        ]
+      },
+      "errors": [
+        "serials"
+      ]
+    },
+    {
+      "name": "serials must be strings",
+      "options": {
+        "serials": [
+          5554
+        ]
+      },
+      "errors": [
+        "serials"
+      ]
+    },
+    {
+      "name": "unknown hubble mode",
+      "options": {
+        "hubble": {
+          "mode": "download"
+        }
+      },
+      "errors": [
+        "hubble.mode"
+      ]
+    },
+    {
+      "name": "apk mode needs a path",
+      "options": {
+        "hubble": {
+          "mode": "apk"
+        }
+      },
+      "errors": [
+        "hubble.path"
+      ]
+    },
+    {
+      "name": "apk path must be absolute",
+      "options": {
+        "hubble": {
+          "mode": "apk",
+          "path": "hubble.apk"
+        }
+      },
+      "errors": [
+        "hubble.path"
+      ]
+    },
+    {
+      "name": "output must be absolute",
+      "options": {
+        "output": "out"
+      },
+      "errors": [
+        "output"
+      ]
+    },
+    {
+      "name": "output must be a string",
+      "options": {
+        "output": 5
+      },
+      "errors": [
+        "output"
+      ]
+    },
+    {
+      "name": "debug must be a boolean",
+      "options": {
+        "debug": 1
+      },
+      "errors": [
+        "debug"
+      ]
+    },
+    {
+      "name": "unknown pull mode",
+      "options": {
+        "pullApks": "some"
+      },
+      "errors": [
+        "pullApks"
+      ]
+    },
+    {
+      "name": "inclusion proof must be an object",
+      "options": {
+        "inclusionProof": true
+      },
+      "errors": [
+        "inclusionProof"
+      ]
+    },
+    {
+      "name": "enabled must be a boolean",
+      "options": {
+        "inclusionProof": {
+          "enabled": "true"
+        }
+      },
+      "errors": [
+        "inclusionProof.enabled"
+      ]
+    },
+    {
+      "name": "verifier is required",
+      "options": {
+        "inclusionProof": {
+          "enabled": true
+        }
+      },
+      "errors": [
+        "inclusionProof.verifierPath"
+      ]
+    },
+    {
+      "name": "verifier must be absolute",
+      "options": {
+        "inclusionProof": {
+          "enabled": true,
+          "verifierPath": "verifier"
+        }
+      },
+      "errors": [
+        "inclusionProof.verifierPath"
+      ]
+    },
+    {
+      "name": "cache dir must be absolute",
+      "options": {
+        "inclusionProof": {
+          "enabled": true,
+          "verifierPath": "/v",
+          "cacheDir": "cache"
+        }
+      },
+      "errors": [
+        "inclusionProof.cacheDir"
+      ]
+    },
+    {
+      "name": "concurrency below range",
+      "options": {
+        "inclusionProof": {
+          "enabled": true,
+          "verifierPath": "/v",
+          "prefetchConcurrency": 0
+        }
+      },
+      "errors": [
+        "inclusionProof.prefetchConcurrency"
+      ]
+    },
+    {
+      "name": "concurrency above range",
+      "options": {
+        "inclusionProof": {
+          "enabled": true,
+          "verifierPath": "/v",
+          "prefetchConcurrency": 65
+        }
+      },
+      "errors": [
+        "inclusionProof.prefetchConcurrency"
+      ]
+    },
+    {
+      "name": "timeout above range",
+      "options": {
+        "inclusionProof": {
+          "enabled": true,
+          "verifierPath": "/v",
+          "prefetchTimeout": 3601
+        }
+      },
+      "errors": [
+        "inclusionProof.prefetchTimeout"
+      ]
+    },
+    {
+      "name": "timeout must be an integer",
+      "options": {
+        "inclusionProof": {
+          "enabled": true,
+          "verifierPath": "/v",
+          "prefetchTimeout": 1.5
+        }
+      },
+      "errors": [
+        "inclusionProof.prefetchTimeout"
+      ]
+    },
+    {
+      "name": "booleans are not integers",
+      "options": {
+        "inclusionProof": {
+          "enabled": true,
+          "verifierPath": "/v",
+          "prefetchConcurrency": true
+        }
+      },
+      "errors": [
+        "inclusionProof.prefetchConcurrency"
+      ]
+    },
+    {
+      "name": "errors are reported together",
+      "options": {
+        "debug": "no",
+        "output": "rel",
+        "pullApks": "x"
+      },
+      "errors": [
+        "debug",
+        "output",
+        "pullApks"
+      ]
+    },
+    {
+      "name": "hubble must be an object, not false",
+      "options": {
+        "hubble": false
+      },
+      "errors": [
+        "hubble"
+      ]
+    },
+    {
+      "name": "hubble must be an object, not an empty string",
+      "options": {
+        "hubble": ""
+      },
+      "errors": [
+        "hubble"
+      ]
+    },
+    {
+      "name": "hubble must be an object, not an empty list",
+      "options": {
+        "hubble": []
+      },
+      "errors": [
+        "hubble"
+      ]
+    },
+    {
+      "name": "inclusionProof must be an object, not false",
+      "options": {
+        "inclusionProof": false
+      },
+      "errors": [
+        "inclusionProof"
+      ]
+    },
+    {
+      "name": "inclusionProof must be an object, not an empty string",
+      "options": {
+        "inclusionProof": ""
+      },
+      "errors": [
+        "inclusionProof"
+      ]
+    },
+    {
+      "name": "inclusionProof must be an object, not an empty list",
+      "options": {
+        "inclusionProof": []
+      },
+      "errors": [
+        "inclusionProof"
+      ]
+    }
+  ]
+}

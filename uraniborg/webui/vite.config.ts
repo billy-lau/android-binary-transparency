@@ -27,6 +27,11 @@ export default defineConfig({
   resolve: {
     alias: { '@': path.resolve(__dirname, './src') },
   },
+  server: {
+    // During `npm run dev`, API calls go to the local helper. Start it with
+    // `npm run helper:dev` so it accepts this origin.
+    proxy: { '/api': { target: 'http://127.0.0.1:8765' } },
+  },
   build: {
     outDir: 'dist',
     sourcemap: true,

@@ -6,7 +6,10 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "helper": "python3 server/uraniborg_helper.py",
+    "helper:dev": "python3 server/uraniborg_helper.py --dev-origin http://localhost:5173",
+    "test:server": "python3 -W error::ResourceWarning -m unittest discover -s server/tests"
   },
   "license": "Apache-2.0",
   "description": "Offline web UI for exploring Uraniborg/Hubble Android preload observations.",
