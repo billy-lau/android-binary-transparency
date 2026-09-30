@@ -122,6 +122,23 @@ class OutcomeTest(RunsTestBase):
     self.assertEqual(list(snap["devices"]), ["A1", "B2"])
     self.assertEqual(snap["state"], "succeeded")
 
+  def test_step_progress_passes_through_in_order(self):
+    run = self.start("success", argv=["--output=" + self.output,
+                                      "--perform_inclusion_proof_check"])
+    snap = self.finish(run)
+    self.assertEqual(snap["state"], "succeeded")
+    proof = [e for e in self.events(run)
+             if e.get("step") == "inclusion_proof_check"]
+    self.assertEqual(proof[0]["type"], "step")
+    self.assertEqual(proof[0]["state"], "started")
+    self.assertEqual(proof[-1]["type"], "step")
+    self.assertEqual(proof[-1]["state"], "finished")
+    progress = [(e["done"], e["total"]) for e in proof[1:-1]]
+    self.assertTrue(all(e["type"] == "step_progress" for e in proof[1:-1]))
+    self.assertEqual(progress[0], (0, 314))
+    self.assertEqual(progress[-1], (314, 314))
+    self.assertEqual(progress, sorted(progress))
+
   def test_unknown_event_types_are_kept_and_ignored(self):
     run = self.start("success")
     snap = self.finish(run)

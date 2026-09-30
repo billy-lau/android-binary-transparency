@@ -32,10 +32,9 @@ import {
   PROOF_STATE_RANK,
   type PackageView,
 } from '@/analyze/lib/model';
-import { PageHeader } from '@/analyze/components/Layout';
 import { LoadInclusionProofButton } from '@/analyze/components/LoadInclusionProofButton';
 import { DataTable, type Column } from '@/shared/components/DataTable';
-import { Card, EmptyState, SearchInput, Stat, Toggle } from '@/shared/components/ui';
+import { Card, EmptyState, PageHeader, SearchInput, Stat, Toggle } from '@/shared/components/ui';
 import { PROOF_FILTER_OPTIONS, ProofBadge, parseProofFilter } from '@/analyze/components/hubble';
 import { downloadBlob, toCsv } from '@/shared/lib/format';
 import { analyzePath } from '@/analyze/paths';

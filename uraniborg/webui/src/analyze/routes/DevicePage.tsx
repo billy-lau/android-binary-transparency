@@ -17,9 +17,8 @@
 import { useEffect, useMemo } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { useActiveObservation } from '@/analyze/lib/store';
-import { PageHeader } from '@/analyze/components/Layout';
 import { DataTable, type Column } from '@/shared/components/DataTable';
-import { Card, CopyButton, EmptyState, KeyValue, SearchInput } from '@/shared/components/ui';
+import { Card, CopyButton, EmptyState, KeyValue, PageHeader, SearchInput } from '@/shared/components/ui';
 import { analyzePath } from '@/analyze/paths';
 
 export function DevicePage() {

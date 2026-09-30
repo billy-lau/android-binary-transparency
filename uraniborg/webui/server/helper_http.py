@@ -49,9 +49,11 @@ import urllib.parse
 import webbrowser
 from typing import Optional
 
+import fsbrowse
 import options as options_mod
 import results as results_mod
 import runs as runs_mod
+import verifier as verifier_mod
 
 HELPER_VERSION = "0.1.0"
 DEFAULT_PORT = 8765
@@ -79,6 +81,9 @@ ROUTES = [
     ("POST", re.compile(r"^/api/runs/" + _RUN + r"/input$"), "input"),
     ("POST", re.compile(r"^/api/runs/" + _RUN + r"/cancel$"), "cancel"),
     ("GET", re.compile(r"^/api/runs/" + _RUN + r"/results/([^/]+)$"), "results"),
+    ("GET", re.compile(r"^/api/fs/list$"), "fs_list"),
+    ("GET", re.compile(r"^/api/verifier$"), "verifier"),
+    ("POST", re.compile(r"^/api/verifier/build$"), "verifier_build"),
 ]
 STREAM_ROUTE = ROUTES[6][1]
 
@@ -128,12 +133,14 @@ class Helper:
   def __init__(self, script: str = DEFAULT_SCRIPT, dist: str = DEFAULT_DIST,
                token: Optional[str] = None, dev_origin: Optional[str] = None,
                run_manager: Optional[runs_mod.RunManager] = None,
-               adb: Optional[str] = None, log_stream=None):
+               adb: Optional[str] = None, log_stream=None,
+               verifier: Optional[verifier_mod.VerifierBuilder] = None):
     self.script = os.path.abspath(script)
     self.dist = os.path.abspath(dist)
     self.token = token or secrets.token_urlsafe(32)
     self.dev_origin = dev_origin.rstrip("/") if dev_origin else None
     self.runs = run_manager or runs_mod.RunManager(self.script)
+    self.verifier = verifier or verifier_mod.VerifierBuilder()
     self._adb = adb
     # None means sys.stderr, looked up when writing.
     self.log_stream = log_stream
@@ -471,6 +478,26 @@ class Handler(http.server.BaseHTTPRequestHandler):
       return
     self._json(200, body)
 
+  def api_fs_list(self, query):
+    try:
+      body = fsbrowse.list_dir((query.get("path") or [""])[0])
+    except fsbrowse.ListError as e:
+      self._error(e.status, e.reason, e.message)
+      return
+    self._json(200, body)
+
+  def api_verifier(self, query):
+    self._json(200, self.helper.verifier.status())
+
+  def api_verifier_build(self, query):
+    try:
+      self.helper.verifier.start()
+    except verifier_mod.BuildError as e:
+      status = {"busy": 409, "go_not_found": 503, "source_not_found": 503}
+      self._error(status.get(e.reason, 500), e.reason, e.message)
+      return
+    self._json(202, self.helper.verifier.status())
+
   def api_stream(self, query, run_id):
     """Server-sent events: a state snapshot, then every entry after the last
     one the browser saw (Last-Event-ID, or ?lastEventId= on a fresh page)."""
@@ -553,6 +580,10 @@ def parse_arguments(argv=None) -> argparse.Namespace:
   parser.add_argument("--dev-origin", default=None, metavar="ORIGIN",
                       help="Also accept API requests proxied by the Vite dev "
                            "server at ORIGIN, e.g. http://localhost:5173.")
+  parser.add_argument("--tools-dir", default=verifier_mod.default_tools_dir(),
+                      metavar="DIR",
+                      help="Where tools the helper builds (the inclusion proof "
+                           "verifier) are written.")
   parser.add_argument("--open", action="store_true",
                       help="Open the UI in the default browser.")
   return parser.parse_args(argv)
@@ -564,7 +595,8 @@ def main(argv=None) -> int:
     sys.stderr.write("The helper runs automate_observation.py, which supports "
                      "only Linux and macOS.\n")
     return 1
-  helper = Helper(script=args.script, dist=args.dist, dev_origin=args.dev_origin)
+  helper = Helper(script=args.script, dist=args.dist, dev_origin=args.dev_origin,
+                  verifier=verifier_mod.VerifierBuilder(tools_dir=args.tools_dir))
   try:
     server = helper.bind(args.port)
   except OSError as e:
@@ -596,5 +628,6 @@ def main(argv=None) -> int:
     print("\nStopping.")
   finally:
     helper.runs.shutdown()
+    helper.verifier.shutdown()
     server.server_close()
   return 0

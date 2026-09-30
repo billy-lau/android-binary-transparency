@@ -21,15 +21,22 @@
  * neither mode has started yet when it is shown.
  */
 
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, FolderOpen, Smartphone, Telescope } from 'lucide-react';
 import clsx from 'clsx';
 import { useApp } from '@/analyze/lib/store';
 import { analyzePath } from '@/analyze/paths';
+import { useObserve, type HelperStatus } from '@/observe/store';
 
 export function LandingPage() {
   const observationCount = useApp((s) => s.observations.length);
+  const helper = useObserve((s) => s.helper);
+  const checkHelper = useObserve((s) => s.checkHelper);
+
+  useEffect(() => {
+    void checkHelper();
+  }, [checkHelper]);
 
   return (
     <div className="h-full overflow-y-auto">
@@ -51,7 +58,8 @@ export function LandingPage() {
                 Run Hubble on a connected Android device with <span className="mono">automate_observation.py</span>.
               </>
             }
-            status="Coming soon"
+            to="/observe"
+            note={<HelperNote helper={helper} />}
           />
           <ModeCard
             icon={<FolderOpen size={22} />}
@@ -72,47 +80,59 @@ export function LandingPage() {
   );
 }
 
+/** Whether Observe can run things from here, or only build a command line. */
+function HelperNote({ helper }: { helper: HelperStatus }) {
+  switch (helper.kind) {
+    case 'checking':
+      return <>Looking for the helper…</>;
+    case 'connected':
+      return (
+        <span className="text-sev-ok">
+          Helper connected{helper.health.activeRun ? ': a run is in progress' : ''}
+        </span>
+      );
+    case 'error':
+      return (
+        <span className="text-sev-high">
+          {helper.badToken
+            ? 'The helper refused this page: open the link it printed most recently'
+            : 'Helper not reachable: you can still build a command line'}
+        </span>
+      );
+    default:
+      return <>Helper not running: you can still build a command line</>;
+  }
+}
+
 function ModeCard({
   icon,
   title,
   description,
   to,
-  status,
+  note,
 }: {
   icon: ReactNode;
   title: string;
   description: ReactNode;
-  /** Where the card leads. Without it, the card is shown but not clickable. */
-  to?: string;
-  /** Short note shown instead of the arrow, e.g. why the card is disabled. */
-  status?: string;
+  to: string;
+  /** A status line under the description. */
+  note?: ReactNode;
 }) {
-  const body = (
-    <>
+  return (
+    <Link
+      to={to}
+      className={clsx(
+        'card group flex flex-col gap-3 p-5',
+        'transition-colors hover:border-accent/50 hover:bg-bg-hover/40',
+      )}
+    >
       <div className="flex items-center justify-between">
         <span className="text-accent">{icon}</span>
-        {status ? (
-          <span className="rounded border border-line px-1.5 py-0.5 text-[11px] text-ink-faint">{status}</span>
-        ) : (
-          <ArrowRight size={16} className="text-ink-faint transition-colors group-hover:text-accent" />
-        )}
+        <ArrowRight size={16} className="text-ink-faint transition-colors group-hover:text-accent" />
       </div>
       <h2 className="text-base font-semibold text-ink">{title}</h2>
       <p className="text-sm text-ink-muted">{description}</p>
-    </>
-  );
-  const className = 'card group flex flex-col gap-3 p-5';
-
-  if (!to) {
-    return (
-      <section className={clsx(className, 'opacity-60')} aria-disabled="true">
-        {body}
-      </section>
-    );
-  }
-  return (
-    <Link to={to} className={clsx(className, 'transition-colors hover:border-accent/50 hover:bg-bg-hover/40')}>
-      {body}
+      {note && <p className="text-xs text-ink-faint">{note}</p>}
     </Link>
   );
 }

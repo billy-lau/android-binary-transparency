@@ -21,10 +21,11 @@ The helper prints a URL like
 request comes from the page it served. It sits after `#`, so the browser
 never sends it to any server, and it changes every time the helper starts.
 
-> **Status:** the Observe page that uses this API is not built yet. Opening
-> the URL today shows the landing page and Analyze, which work without the
-> helper. To exercise the API now, call it with `curl` and the token in an
-> `X-Uraniborg-Token` header (see [API](#api)).
+Open that URL and choose **Observe a device**. On load the page moves the
+token into the tab's session storage and removes it from the address bar, so
+a reload keeps working but a new tab needs the URL again. To call the API
+directly, use `curl` with the token in an `X-Uraniborg-Token` header (see
+[API](#api)).
 
 | Flag | Default | Meaning |
 | --- | --- | --- |
@@ -32,6 +33,7 @@ never sends it to any server, and it changes every time the helper starts.
 | `--dist` | `../dist` | The built UI. |
 | `--script` | `../../scripts/python/automate_observation.py` | The script to run. |
 | `--dev-origin` | none | Also accept requests proxied by the Vite dev server, e.g. `http://localhost:5173`. |
+| `--tools-dir` | per-user cache | Where the verifier the helper builds is written (see [Security model](#security-model)). |
 | `--open` | off | Open the URL in the default browser. |
 
 ### With the Vite dev server
@@ -94,6 +96,9 @@ POST bodies must be `application/json` and at most 64 KiB. Errors look like
 | `POST /api/runs/:id/input` | Presses Enter for a pending prompt that expects it. 409 `not_waiting_for_input` otherwise. |
 | `POST /api/runs/:id/cancel` | 202, or 409 `not_running`. |
 | `GET /api/runs/:id/results/:serial` | That device's result files as `{dir, files: [{name, text}], skipped}`. |
+| `GET /api/fs/list?path=` | For the Browse dialog: `{path, parent?, home, selected?, missing?, entries: [{name, dir, exec?, link?}], truncated?}`. Lists the nearest existing directory: a file's own directory (named in `selected`), or the closest existing parent of a path that does not exist yet (the rest of that path in `missing`, e.g. `run1`). Blank means home. 400 `not_absolute`, 403 `permission_denied`. |
+| `GET /api/verifier` | The inclusion proof verifier: source found, Go path and version, whether it is built, and the last build's state and output. |
+| `POST /api/verifier/build` | Builds the verifier: 202 with the status above. 409 `busy`, 503 `go_not_found` or `source_not_found`. |
 
 The stream sends `event: state` with a snapshot first, then numbered
 `event`, `state` and `log` messages. Each message has an `id`, so a
@@ -121,6 +126,16 @@ served:
   names and are size-capped.
 - Options are validated against an allow-list and passed as an argv list,
   never through a shell.
+- The Browse dialog's listing returns names and kinds (directory,
+  executable, link) of one directory at a time, never file contents. It can
+  list any directory your user can, which is no more than a token holder
+  could already reach by running the script.
+- The verifier build is one fixed command (`go build -o <tools dir>/verifier
+  ./cmd/verifier` in `verifier_tools/verify`); nothing from the request is
+  passed to it. The binary goes to `--tools-dir` (default
+  `~/Library/Caches/uraniborg-helper` on macOS,
+  `${XDG_CACHE_HOME:-~/.cache}/uraniborg-helper` on Linux), outside the
+  source tree.
 
 ## Tests
 

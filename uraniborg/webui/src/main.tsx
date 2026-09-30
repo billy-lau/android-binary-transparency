@@ -24,7 +24,13 @@ import { HashRouter } from 'react-router-dom';
 import { App } from './App';
 import { useApp } from '@/analyze/lib/store';
 import type { InputFile } from '@/analyze/lib/parse';
+import { captureTokenFromUrl } from '@/observe/lib/api';
 import './index.css';
+
+// The helper's link carries its token (`#/?token=...`). Move it into session
+// storage before the router sees the URL, so it never shows in the address bar
+// or in a bookmark.
+captureTokenFromUrl();
 
 const container = document.getElementById('root');
 if (!container) throw new Error('#root not found');

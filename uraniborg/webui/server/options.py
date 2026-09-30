@@ -16,14 +16,13 @@
 """Observe form options -> automate_observation.py arguments.
 
 This is the single source of truth for what the UI may ask the script to do.
-The Observe UI (not built yet) is meant to mirror the pure part (normalize()
-and build_argv()) for instant feedback, running the same
-tests/option_cases.json so the two cannot drift. Today only test_options.py
-runs those cases.
+The Observe UI mirrors the pure part (normalize() and build_argv()) in
+src/observe/lib/options.ts for instant feedback. Both test_options.py and
+options.test.ts run tests/option_cases.json, so the two cannot drift.
 
 Validation has two layers:
   * normalize(): shape, types, ranges and the dependent-field rules. Pure,
-    so a future TypeScript mirror can reproduce it exactly.
+    so the TypeScript mirror can reproduce it exactly.
   * check_paths(): what the paths point at on this host. Server only.
 
 Every value is passed as one `--flag=value` argument, so a value that starts

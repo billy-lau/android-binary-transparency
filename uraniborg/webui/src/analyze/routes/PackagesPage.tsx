@@ -27,9 +27,8 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Download, X } from 'lucide-react';
 import { useActiveObservation } from '@/analyze/lib/store';
 import { INSTALL_STATE_LABEL, type InstallState, type PackageView } from '@/analyze/lib/model';
-import { PageHeader } from '@/analyze/components/Layout';
 import { DataTable, type Column } from '@/shared/components/DataTable';
-import { Badge, EmptyState, SearchInput, Toggle } from '@/shared/components/ui';
+import { Badge, EmptyState, PageHeader, SearchInput, Toggle } from '@/shared/components/ui';
 import {
   CertChip,
   PROOF_FILTER_OPTIONS,

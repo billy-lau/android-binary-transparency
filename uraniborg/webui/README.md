@@ -1,15 +1,21 @@
 # Uraniborg Explorer
 
-A local, offline web UI for reading Hubble observations. It turns the raw JSON
-in `packages.txt`, `certificates.txt` and friends into a navigable model of a
-device: what is installed, who signed it, what it is allowed to do, and what
-changed between builds.
+A local web UI for Hubble observations, with two modes:
+
+- **Observe a device** runs `automate_observation.py` on devices connected to
+  this computer, from a form instead of a command line, and follows the run
+  live. It needs the small local [helper server](server/README.md).
+- **Analyze results** turns the raw JSON in `packages.txt`,
+  `certificates.txt` and friends into a navigable model of a device: what is
+  installed, who signed it, what it is allowed to do, and what changed between
+  builds. It works with or without the helper.
 
 > [!IMPORTANT]
 > Everything runs in your browser. Observation files are parsed in-page, held in
 > memory only, and are never uploaded or written to browser storage. The page
-> ships a `default-src 'none'` Content Security Policy, so it cannot make
-> network requests even if it wanted to.
+> ships a `default-src 'none'` Content Security Policy that allows requests only
+> to the origin the page was served from. That is the local helper when you
+> use Observe, and nothing otherwise, so the page cannot reach any other host.
 
 ## Requirements
 
@@ -18,8 +24,14 @@ changed between builds.
 | **Node.js** (ships `npm`) | 20 or newer | required — builds and serves the app |
 | A modern browser | Chrome/Edge 100+, Firefox 100+, Safari 16+ | required — WebCrypto and File/Directory APIs |
 | Network access to `registry.npmjs.org` | — | required **once**, for `npm install` |
+| Python | 3.9 or newer | Observe — runs the helper and `automate_observation.py` |
+| `adb` on `PATH`, and a device with USB debugging authorized | — | Observe |
+| The Android SDK, **or** a prebuilt Hubble APK | — | Observe — to build Hubble, or to skip building it |
+| Go | 1.25 or newer | optional — builds the inclusion proof verifier |
 | Python 3.8+ and `openssl` | — | optional — sample data generator |
 | Google Chrome and Node 22.12+ | — | optional — end-to-end smoke test |
+
+Observe runs on Linux and macOS, like `automate_observation.py` itself.
 
 New to Node? Follow
 [**How to set up and run Uraniborg Explorer**](../docs/webui_setup.md) — a
@@ -28,15 +40,33 @@ including per-platform Node installation and a troubleshooting table.
 
 ## Quick start
 
+### Observe a device
+
 ```bash
 node --version       # v20 or newer — see the setup guide if this fails
 cd uraniborg/webui
 npm install          # the only step that needs network access
+npm run build        # the helper serves the built UI from dist/
+npm run helper       # prints the link to open
+```
+
+The helper prints a link such as
+`http://127.0.0.1:8765/#/?token=…`. Open **that exact link**, then choose
+**Observe a device**. Add `-- --open` (`npm run helper -- --open`) to open it
+for you. Press Ctrl-C in the helper's terminal to stop it.
+
+### Analyze results only
+
+```bash
+cd uraniborg/webui
+npm install
 npm run dev          # http://localhost:5173
 ```
 
-Then drag a Hubble results directory onto the page (the one
-`automate_observation.py` writes), or use **Choose folder**.
+Then choose **Analyze results** and drag a Hubble results directory onto the
+page (the one `automate_observation.py` writes), or use **Choose folder**.
+Pages opened this way have no helper: Observe still builds the command line for
+you to paste into a terminal, but cannot run it.
 
 No device handy? Generate two synthetic observations first:
 
@@ -66,11 +96,82 @@ npm run preview      # serve dist/ at http://localhost:4173
 `dist/` is a self-contained static bundle with relative asset paths and hash
 routing, so it can be served from any origin or sub-path — including
 `python3 -m http.server 8000 --directory dist` on a machine with no Node.
+Served this way, Analyze works fully and Observe only builds command lines;
+`npm run helper` serves the same `dist/` with Observe enabled.
 
 > [!WARNING]
 > It must be served over HTTP, not opened as a `file://` URL: browsers block ES
 > modules and stylesheets loaded from the opaque `file://` origin, so you would
 > get a blank page and CORS errors in the console.
+
+## Observe a device
+
+The helper binds to 127.0.0.1 only and runs `automate_observation.py` (from
+`../scripts/python/`) for the page it served. The form covers the script's
+options:
+
+- **Devices**: the connected devices from `adb devices`, with refresh.
+  Nothing ticked means every connected device. Unauthorized or offline
+  devices are shown but cannot be ticked. A serial can also be typed by hand.
+- **Hubble APK**: build it from source (needs the Android SDK), or use an
+  existing APK. **Use the prebuilt APK** fills in
+  `uraniborg/prebuilts/APK/latest` when it exists.
+- **Output**: where results go. Blank means `results/` next to the script.
+- **Debug logging** and **APK extraction** (none, all, or pre-installed only).
+- **Inclusion proof check**: the verifier, and the pre-fetch settings. See
+  below.
+
+Path fields have a **Browse…** button. A browser never tells a page the real
+path of a file you pick, so the dialog lists folders through the helper
+instead, showing names only. The **Command** box always shows the exact
+command line, ready to copy, and the form is checked as you type.
+
+**Run** opens the run page: each device's steps as they happen, the log
+(filter, search, **Download log**), and **Cancel run**. Cancelling while
+Hubble is being installed can leave it on the device. When the script needs
+you (installing Hubble by hand on a Xiaomi phone, or confirming an `adb
+backup`), a dialog says what to do on the device. When a device finishes,
+**Open in Analyze** loads its results, including any inclusion proof results.
+Reloading the run page is safe: it rebuilds itself from the helper.
+
+### The inclusion proof verifier
+
+The check needs the `verifier` program from `verifier_tools/verify` (Go).
+Under the verifier field, the helper reports whether it has already built one
+and offers **Build verifier**, which runs `go build` and writes the binary to
+the helper's tools directory: `~/Library/Caches/uraniborg-helper` on macOS,
+`${XDG_CACHE_HOME:-~/.cache}/uraniborg-helper` on Linux, or `--tools-dir`.
+Nothing is written to the source tree. The first build downloads Go modules.
+To build it yourself instead:
+
+```bash
+cd verifier_tools/verify && go build ./cmd/verifier
+```
+
+### The link and its token
+
+The token in the helper's link is how it knows a request comes from the page
+it served; anyone with the link can run adb on your devices, so keep it
+private. It sits after `#`, so it is never sent to a server, and the page
+moves it into the tab's session storage and out of the address bar:
+
+- Reloading the tab keeps working.
+- A new tab or window needs the link again.
+- Restarting the helper makes a new link; open that one.
+
+If the page says the helper refused it, open the link the helper printed most
+recently.
+
+### What is stored
+
+The form remembers its fields in `localStorage`
+(`uraniborg-explorer/observe-form/v1`), except the device selection: serials
+identify devices, and nothing about an observed device is written to browser
+storage. **Reset form** clears it. The run log stays in memory unless you
+download it.
+
+The helper's API, flags and security model are described in
+[server/README.md](server/README.md).
 
 ## What it reads
 
@@ -374,6 +475,28 @@ python3 scripts/generate_sample_data.py
 VITE_SMOKE_HOOKS=1 npx vite build
 node scripts/smoke.mjs .smoke
 npm run build                # replace the hook-enabled dist/ before serving or sharing it
+
+# The helper's tests, with a stand-in for automate_observation.py (no device).
+npm run test:server
+```
+
+To work on Observe with live reload, run the helper so it accepts the Vite dev
+server, then open the **Dev server:** link it prints (not the plain Vite URL,
+which has no token):
+
+```bash
+npm run helper:dev           # terminal 1
+npm run dev                  # terminal 2
+```
+
+To try Observe without a device, point the helper at the stand-in script.
+`FAKE_AUTOMATE_SCENARIO` picks what happens (`success`, `xiaomi`, `backup`,
+`early_exit`, `hang`, `crash`, ...). Give the form an output directory, or the
+results land under `server/tests/`:
+
+```bash
+FAKE_AUTOMATE_SCENARIO=xiaomi python3 server/uraniborg_helper.py \
+  --script server/tests/fake_automate.py
 ```
 
 Troubleshooting for all of the above lives in the
@@ -383,4 +506,5 @@ Troubleshooting for all of the above lives in the
 
 React 18 + TypeScript + Vite, Tailwind CSS, React Router (hash mode), Zustand
 for state, TanStack Virtual for large tables, `@peculiar/x509` for certificate
-decoding, and `lucide-react` for icons. No backend, no telemetry.
+decoding, and `lucide-react` for icons. No telemetry. The optional helper
+(`server/`) is Python 3.9+ standard library only.

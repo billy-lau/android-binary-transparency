@@ -19,10 +19,11 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <!--
-      Strict CSP: this app is 100% client-side. It never talks to a network
-      origin, so we forbid every remote fetch/connect vector outright. Hubble
-      observations can contain sensitive device inventory; keeping the app
-      offline by construction means the data physically cannot leave the host.
+      Strict CSP: the app talks only to the origin it was served from, which is
+      the local helper when Observe is used (see server/README.md) and nothing
+      otherwise. Every remote fetch/connect vector is forbidden outright. Hubble
+      observations can contain sensitive device inventory; with no other origin
+      reachable, the data cannot leave the host.
       (frame-ancestors is omitted here because it is only honoured via an HTTP
       header, not a meta element; set it at the server if you host this.)
     -->

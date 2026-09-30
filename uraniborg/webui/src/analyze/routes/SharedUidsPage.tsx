@@ -17,8 +17,7 @@
 import { useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useActiveObservation } from '@/analyze/lib/store';
-import { PageHeader } from '@/analyze/components/Layout';
-import { Badge, Card, EmptyState, SearchInput, Toggle } from '@/shared/components/ui';
+import { Badge, Card, EmptyState, PageHeader, SearchInput, Toggle } from '@/shared/components/ui';
 import { CertChip } from '@/analyze/components/hubble';
 import type { SharedUidGroup } from '@/analyze/lib/model';
 import { analyzePath } from '@/analyze/paths';
@@ -175,7 +174,10 @@ export function SharedUidsPage() {
         </div>
       </div>
 
-      <div className="p-6 flex flex-col gap-3 min-h-0">
+      {/* shrink-0: this page scrolls as a whole. As a shrinkable flex item the
+          list would be squeezed to the viewport, and the cards with it, since
+          overflow-hidden lets a flex item shrink below its content. */}
+      <div className="flex shrink-0 flex-col gap-3 p-6">
         {groups.length === 0 ? (
            <EmptyState title="No matching shared UIDs found." />
         ) : (

@@ -32,6 +32,9 @@ import { IntegrityPage } from '@/analyze/routes/IntegrityPage';
 import { BinariesPage } from '@/analyze/routes/BinariesPage';
 import { DevicePage } from '@/analyze/routes/DevicePage';
 import { ComparePage } from '@/analyze/routes/ComparePage';
+import { ObserveLayout } from '@/observe/ObserveLayout';
+import { ObservePage } from '@/observe/routes/ObservePage';
+import { RunPage } from '@/observe/routes/RunPage';
 
 /** Opens Analyze on the overview if something is loaded, else on the loader. */
 function AnalyzeHome() {
@@ -54,6 +57,11 @@ export function App() {
   return (
     <Routes>
       <Route path="/" element={<LandingPage />} />
+      <Route path="/observe" element={<ObserveLayout />}>
+        <Route index element={<ObservePage />} />
+        <Route path="runs/:id" element={<RunPage />} />
+        <Route path="*" element={<Navigate to="/observe" replace />} />
+      </Route>
       <Route path={ANALYZE_ROOT} element={<Layout />}>
         <Route index element={<AnalyzeHome />} />
         <Route path="load" element={<LoadPage />} />

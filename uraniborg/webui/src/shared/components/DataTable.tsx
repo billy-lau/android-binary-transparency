@@ -29,7 +29,7 @@
  * layout you had to set up again on every visit is worse than no layout at all.
  */
 
-import { useMemo, useRef, useState, type ReactNode } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { ArrowDown, ArrowUp, ChevronsUpDown } from 'lucide-react';
 import clsx from 'clsx';
@@ -80,6 +80,7 @@ export function DataTable<T>({
   emptyMessage = 'No matching rows.',
   maxHeight = 'calc(100vh - 260px)',
   tableId,
+  stickToBottom = false,
 }: {
   rows: T[];
   columns: Array<Column<T>>;
@@ -97,6 +98,11 @@ export function DataTable<T>({
   maxHeight?: string;
   /** Stable id used to remember this table's column widths across visits. */
   tableId?: string;
+  /**
+   * Keep the last row in view as rows are added, like a terminal: for a
+   * growing log. Scrolling up pauses it; scrolling back to the end resumes.
+   */
+  stickToBottom?: boolean;
 }) {
   const [sort, setSort] = useState<SortState | undefined>(initialSort);
   const parentRef = useRef<HTMLDivElement>(null);
@@ -151,6 +157,14 @@ export function DataTable<T>({
     estimateSize: () => rowHeight,
     overscan: 12,
   });
+
+  // Whether the view was at the end before the latest rows arrived. A ref,
+  // not state: it changes on every scroll and nothing renders from it.
+  const atBottom = useRef(true);
+  useLayoutEffect(() => {
+    const el = parentRef.current;
+    if (stickToBottom && atBottom.current && el) el.scrollTop = el.scrollHeight;
+  }, [stickToBottom, sorted]);
 
   /**
    * Cycles ascending → descending → unsorted.
@@ -256,8 +270,10 @@ export function DataTable<T>({
           // The header lives outside this box so it stays put vertically; keep
           // it aligned when resized columns push the grid wider than the card.
           onScroll={(e) => {
+            const el = e.currentTarget;
             const header = headerScrollRef.current;
-            if (header) header.scrollLeft = e.currentTarget.scrollLeft;
+            if (header) header.scrollLeft = el.scrollLeft;
+            atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < rowHeight;
           }}
         >
           <div

@@ -25,6 +25,9 @@ Environment:
                           crash | noise | bad_version | hang | stubborn |
                           daemon
   FAKE_AUTOMATE_DELAY     seconds between steps (default 0.02)
+  FAKE_AUTOMATE_SPLITS    APK splits the inclusion proof check reports as its
+                          step_progress total, with
+                          --perform_inclusion_proof_check (default 314)
   FAKE_AUTOMATE_SAMPLE    directory of Hubble .txt files to copy into the
                           results (default: ../../sample-data/pixel-target if
                           it exists, else small placeholder files)
@@ -63,6 +66,7 @@ class Fake:
     self.delay = delay
     self.version = version
     self.summary = {}
+    self.splits = int(os.environ.get("FAKE_AUTOMATE_SPLITS", "314"))
 
   def emit(self, type_, **fields):
     if self.events is None:
@@ -166,7 +170,29 @@ class Fake:
     results_dir = self.write_results(serial)
     self.emit("step", step="extract_results", state="finished", device=serial,
               duration_ms=int(self.delay * 1000))
+    if self.args.perform_inclusion_proof_check:
+      self.check_inclusion_proofs(serial)
     self.device_finished(serial, "success", results_dir=results_dir)
+
+  def check_inclusion_proofs(self, serial):
+    """An inclusion_proof_check step that reports step_progress.
+
+    Like the real script: the first event has done=0, a few follow as splits
+    are verified, and the one with done=total is always sent.
+    """
+    total = self.splits
+    self.emit("step", step="inclusion_proof_check", state="started",
+              device=serial)
+    self.emit("step_progress", step="inclusion_proof_check", device=serial,
+              done=0, total=total)
+    ticks = 5
+    for tick in range(1, ticks + 1):
+      time.sleep(self.delay)
+      done = total * tick // ticks
+      self.emit("step_progress", step="inclusion_proof_check", device=serial,
+                done=done, total=total)
+    self.emit("step", step="inclusion_proof_check", state="finished",
+              device=serial, duration_ms=int(self.delay * ticks * 1000))
 
   def run(self):
     self.emit("run_started", argv=sys.argv[1:], pid=os.getpid())
@@ -208,6 +234,7 @@ def main():
   parser.add_argument("--events")
   parser.add_argument("--output", default=os.path.join(os.getcwd(), "results"))
   parser.add_argument("--serial", action="append")
+  parser.add_argument("--perform_inclusion_proof_check", action="store_true")
   args, _ = parser.parse_known_args()
 
   events = None

@@ -39,7 +39,6 @@ import {
   providerGateSummary,
 } from '@/analyze/lib/providers';
 import { SEVERITY_ORDER, permissionSeverity } from '@/analyze/lib/sensitivity';
-import { PageHeader } from '@/analyze/components/Layout';
 import { ResizeHandle } from '@/shared/components/ResizeHandle';
 import { LoadInclusionProofButton } from '@/analyze/components/LoadInclusionProofButton';
 import {
@@ -49,6 +48,7 @@ import {
   CopyButton,
   EmptyState,
   KeyValue,
+  PageHeader,
   SearchInput,
   Tabs,
 } from '@/shared/components/ui';
